@@ -3241,6 +3241,13 @@ bool TabSI::processCard(gdioutput& gdi, pRunner runner, const SICard& csic, bool
       rout.info += runner->getClub() + +L",   ";
     rout.info += runner->getClass(true);
 
+    // Show the course whenever it adds information to the class, which is the case
+    // when several courses are used within one class (course pool, second race).
+    if (const pCourse crs = runner->getCourse(false)) {
+      if (crs->getName() != runner->getClass(true))
+        rout.info += L",   " + crs->getName();
+    }
+
     // Write read card to log
     logCard(gdi, sic);
 
