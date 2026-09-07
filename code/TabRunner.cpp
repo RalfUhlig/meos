@@ -86,6 +86,7 @@ void TabRunner::enableControlButtons(gdioutput &gdi, bool enable, bool vacant)
     gdi.enableInput("Save");
     gdi.enableInput("Undo");
     gdi.enableInput("EditAnnotation");
+    gdi.enableInput("SecondRace", true);
     if (vacant) {
       gdi.disableInput("Move", true);
       gdi.disableInput("NoStart", true);
@@ -100,6 +101,7 @@ void TabRunner::enableControlButtons(gdioutput &gdi, bool enable, bool vacant)
     gdi.disableInput("Save");
     gdi.disableInput("Undo");
     gdi.disableInput("EditAnnotation");
+    gdi.disableInput("SecondRace", true);
     gdi.disableInput("Move", true);
     gdi.disableInput("NoStart", true);
   }
@@ -1110,6 +1112,31 @@ int TabRunner::runnerCB(gdioutput &gdi, GuiEventType type, BaseInfo* data) {
       oe->fillClubs(gdi, "Club");
       selectRunner(gdi, r);
       gdi.setInputFocus("Name", true);
+    }
+    else if (bi.id=="SecondRace") {
+      if (runnerId == 0)
+        return 0;
+
+      save(gdi, runnerId, true);
+
+      pRunner src = oe->getRunner(runnerId, 0);
+      if (!src)
+        return 0;
+
+      src = src->getMultiRunner(0);
+
+      // Without a read card on the first entry, two entries sharing a card number are
+      // ambiguous for the readout, and checkCardUsed would rightfully object later.
+      if (src->getCardNo() > 0 && !src->getCard() &&
+          !gdi.ask(L"X har inget inläst resultat ännu. Vill du ändå lägga upp ett nytt lopp?#" + src->getName()))
+        return 0;
+
+      pRunner r = oe->addSecondRaceEntry(src, 0);
+
+      fillRunnerList(gdi);
+      oe->fillClubs(gdi, "Club");
+      selectRunner(gdi, r);
+      gdi.setInputFocus("RClass", true);
     }
     else if (bi.id=="Remove") {
       if (!runnerId)
@@ -3530,6 +3557,8 @@ bool TabRunner::loadPage(gdioutput &gdi)
   gdi.popX();
   gdi.dropLine(2.2);
   gdi.addButton("EditAnnotation", L"Kommentar >>", RunnerCB, L"Lägg till eller redigera kommentarer om deltagaren.");
+  gdi.addButton("SecondRace", L"Nytt lopp", RunnerCB,
+                L"Skapa en ny anmälan för samma person, för ytterligare ett lopp med samma bricka.");
 
   enableControlButtons(gdi, false, false);
   gdi.fillDown();

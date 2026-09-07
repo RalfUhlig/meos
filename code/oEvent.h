@@ -1228,7 +1228,10 @@ public:
 
 
   wstring getAutoRunnerName() const;
-  
+
+  /** Get a unique name for an additional entry of the same person, e.g. "Ek (2), Anna". */
+  wstring getNextEntryName(const wstring &name) const;
+
   pRunner addRunner(const wstring &pname, int clubId, int classId,
                     int cardNo, const wstring &birthDate, bool autoAdd);
 
@@ -1238,6 +1241,12 @@ public:
   pRunner addRunnerFromDB(const pRunner db_r, int classId, bool autoAdd);
   pRunner addRunner(const oRunner &r, bool updateStartNo);
   pRunner addRunnerVacant(int classId);
+
+  /** Create an additional entry for a competitor who runs another course with the same
+      card. The read card (oCard) and all result data stay with the source runner; the
+      new entry only shares the card number, so that the next readout is matched to it.
+      classId == 0 keeps the class of the source runner. */
+  pRunner addSecondRaceEntry(pRunner src, int classId);
 
   pRunner getRunner(int Id, int stage) const;
 

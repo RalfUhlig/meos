@@ -1084,7 +1084,37 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
         r = gEvent->getRunner(rid, 0);
       else r = gEvent->addRunner(lang.tl(L"Oparad bricka"), lang.tl("Okänd"), 0, 0, L"", false);
 
+      // Changing class and reading the card replaces an existing result. Ask first.
+      if (r && r->getCard() && !askOverwriteCard(gdi, r))
+        return 0;
+
       r->setClassId(lbi.data, true);
+
+      gdi.restore();
+      SICard copy = activeSIC;
+      activeSIC.clear(&activeSIC);
+      processCard(gdi, r, copy);
+    }
+    else if (bi.id == "SecondRaceSI") {
+      // The competitor runs another course with the same card. Keep the existing
+      // result and read the card into a new entry.
+      ListBoxInfo lbi;
+      gdi.getSelectedItem("Classes", lbi);
+
+      if (lbi.data == 0 || lbi.data == -1) {
+        gdi.alert("Du måste välja en klass");
+        return 0;
+      }
+
+      DWORD rid;
+      pRunner rOld = nullptr;
+      if (gdi.getData("RunnerId", rid) && rid > 0)
+        rOld = gEvent->getRunner(rid, 0);
+
+      if (!rOld)
+        return 0;
+
+      pRunner r = gEvent->addSecondRaceEntry(rOld, lbi.data);
 
       gdi.restore();
       SICard copy = activeSIC;
@@ -2655,42 +2685,8 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
   if (sic.runnerId == 0) {
     r = oe->getRunnerByCardNo(sic.CardNumber, 0, oEvent::CardLookupProperty::ForReadout);
 
-    if (!r && multipleStarts && !oe->isCardRead(sic)) {
-      // Convert punch times to relative times.
-      oe->convertTimes(nullptr, sic);
-      int time = sic.getFirstTime();
-      pRunner rOld = oe->getRunnerByCardNo(sic.CardNumber, time, oEvent::CardLookupProperty::Any);
-
-      if (rOld) {
-        // New entry
-        vector<pClass> classes;
-        oe->findBestClass(sic, classes);
-        int classId = rOld->getClassId(false);
-        if (classes.size() == 1)
-          classId = classes[0]->getId();
-
-        wstring given = rOld->getGivenName();
-        wstring family = rOld->getFamilyName();
-        size_t ep = family.find_last_of(')');
-        size_t sp = family.find_last_of('(');
-
-        int num = 1;
-        if (ep != string::npos && sp != string::npos && sp + 1 < ep) {
-          num = _wtoi(family.data() + sp + 1);
-          if (num > 0) {
-            family = trim(family.substr(0, ep - 2));
-          }
-        }
-        if (classId == rOld->getClassId(false))
-          family +=  + L" (" + itow(num + 1) + L")";
-
-        r = oe->addRunner(L"tmp", rOld->getClub(),
-          classId, sic.CardNumber, rOld->getBirthDate(), false);
-
-        r->setName(family + L", " + given, true);
-        r->setFlag(oAbstractRunner::TransferFlags::FlagNoDatabase, true);
-      }
-    }
+    if (!r && multipleStarts && !oe->isCardRead(sic))
+      r = createMultipleStartEntry(sic);
   }
   else {
     r = gEvent->getRunner(sic.runnerId, 0);
@@ -2807,10 +2803,17 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
 
   pRunner db_r = 0;
   if (sic.runnerId == 0) {
-    if (!readBefore)
+    if (!readBefore) {
       r = gEvent->getRunnerByCardNo(sic.CardNumber, 0, oEvent::CardLookupProperty::ForReadout);
-    else
-      r = getRunnerForCardSplitPrint(sic);
+    }
+    else {
+      // The operator confirmed a re-read of an identical card above.
+      r = gEvent->getRunnerByCardNo(sic.CardNumber, 0, oEvent::CardLookupProperty::ForReadout);
+      if (!r && multipleStarts)
+        r = createMultipleStartEntry(sic);
+      if (!r)
+        r = getRunnerForCardSplitPrint(sic);
+    }
 
     if (!r && showDatabase()) {
       //Look up in database.
@@ -2855,6 +2858,34 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
       processUnmatched(gdi, sic, !pageLoaded);
     }
   }
+}
+
+pRunner TabSI::createMultipleStartEntry(SICard &sic) {
+  // Convert punch times to relative times.
+  oe->convertTimes(nullptr, sic);
+  int time = sic.getFirstTime();
+  pRunner rOld = oe->getRunnerByCardNo(sic.CardNumber, time, oEvent::CardLookupProperty::Any);
+
+  if (!rOld)
+    return nullptr;
+
+  vector<pClass> classes;
+  oe->findBestClass(sic, classes);
+  int classId = rOld->getClassId(false);
+  if (classes.size() == 1)
+    classId = classes[0]->getId();
+
+  pRunner r = oe->addSecondRaceEntry(rOld, classId);
+
+  if (r && classId != rOld->getClassId(false)) {
+    // Another class than the earlier entry. Keep the plain name, without a number.
+    wstring base;
+    extractEntryNumber(rOld->getNameRaw(), base);
+    r->setName(base, true);
+    r->synchronize(true);
+  }
+
+  return r;
 }
 
 pRunner TabSI::getRunnerForCardSplitPrint(const SICard& sic) const {
@@ -2958,12 +2989,22 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     //Process this card.
     activeSIC = sic;
 
-    //No class. Select...
+    //No class, or an existing result. Select...
     gdi.setRestorePoint();
 
+    // This branch is also reached for a runner that has a class but already a read card.
+    const bool hasResult = r->getCard() != nullptr;
+
     wchar_t bf[256];
-    swprintf_s(bf, 256, L"SI X inläst. Brickan tillhör Y som saknar klass.#%d#%s",
-      sic.CardNumber, r->getName().c_str());
+    if (hasResult)
+      swprintf_s(bf, 256, L"SI X inläst. Y har redan ett inläst resultat i klassen Z.#%d#%s#%s",
+        sic.CardNumber, r->getName().c_str(), r->getClass(true).c_str());
+    else if (r->getClassId(false))
+      swprintf_s(bf, 256, L"SI X inläst. Bekräfta klass för Y.#%d#%s",
+        sic.CardNumber, r->getName().c_str());
+    else
+      swprintf_s(bf, 256, L"SI X inläst. Brickan tillhör Y som saknar klass.#%d#%s",
+        sic.CardNumber, r->getName().c_str());
 
     gdi.dropLine();
     gdi.addString("", 1, bf);
@@ -2974,15 +3015,30 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     gdi.addSelection("Classes", 200, 300, 0, L"Klass:");
     gEvent->fillClasses(gdi, "Classes", {}, oEvent::extraNone, oEvent::filterNone);
     gdi.setInputFocus("Classes");
-    //Find matching class...
-    vector<pClass> classes;
-    gEvent->findBestClass(sic, classes);
-    if (classes.size() > 0)
-      gdi.selectItemByData("Classes", classes[0]->getId());
+
+    if (r->getClassId(false)) {
+      // The runner has a class. Do not overrule it by a guess from the card.
+      gdi.selectItemByData("Classes", r->getClassId(false));
+    }
+    else {
+      //Find matching class...
+      vector<pClass> classes;
+      gEvent->findBestClass(sic, classes);
+      if (classes.size() > 0)
+        gdi.selectItemByData("Classes", classes[0]->getId());
+    }
 
     gdi.dropLine();
 
-    gdi.addButton("OK4", "OK", SportIdentCB).setDefault();
+    if (hasResult) {
+      // Preserving the existing result is the safe action, and thus the default one.
+      gdi.addButton("SecondRaceSI", L"Nytt lopp för deltagaren", SportIdentCB,
+                    L"Skapa en ny anmälan och läs in brickan där. Det tidigare resultatet behålls.").setDefault();
+      gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB);
+    }
+    else {
+      gdi.addButton("OK4", "OK", SportIdentCB).setDefault();
+    }
     gdi.fillDown();
 
     gdi.popX();
