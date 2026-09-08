@@ -1213,10 +1213,12 @@ void MetaList::interpret(oEvent *oe, const gdioutput &gdi, const oListParam &par
 
   if (li.sortOrder == SortOrder::CourseResult) {
     li.replaceType(EPostType::lRunnerPlace, EPostType::lRunnerCoursePlace, true);
+    li.replaceType(EPostType::lRunnerTimeAfter, EPostType::lRunnerCourseTimeAfter, true);
   }
 
   if (li.sortOrder == SortOrder::ClassCourseResult) {
     li.replaceType(EPostType::lRunnerPlace, EPostType::lRunnerClassCoursePlace, true);
+    li.replaceType(EPostType::lRunnerTimeAfter, EPostType::lRunnerClassCourseTimeAfter, true);
   }
 
 }
