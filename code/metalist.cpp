@@ -1213,10 +1213,12 @@ void MetaList::interpret(oEvent *oe, const gdioutput &gdi, const oListParam &par
 
   if (li.sortOrder == SortOrder::CourseResult) {
     li.replaceType(EPostType::lRunnerPlace, EPostType::lRunnerCoursePlace, true);
+    li.replaceType(EPostType::lRunnerTimeAfter, EPostType::lRunnerCourseTimeAfter, true);
   }
 
   if (li.sortOrder == SortOrder::ClassCourseResult) {
     li.replaceType(EPostType::lRunnerPlace, EPostType::lRunnerClassCoursePlace, true);
+    li.replaceType(EPostType::lRunnerTimeAfter, EPostType::lRunnerClassCourseTimeAfter, true);
   }
 
 }
@@ -2251,6 +2253,7 @@ void MetaList::initSymbols() {
     typeToSymbol[lRunnerRank] = L"RunnerRank";
     typeToSymbol[lRunnerRankScore] = L"RunnerRankScore";
     typeToSymbol[lRunnerCourse] = L"RunnerCourse";
+    typeToSymbol[lRunnerCourseFamily] = L"RunnerCourseFamily";
     typeToSymbol[lRunnerRogainingPoint] = L"RunnerRogainingPoint";
     typeToSymbol[lRunnerRogainingPointTotal] = L"RunnerRogainingPointTotal";
     typeToSymbol[lRunnerRogainingPointReduction] = L"RunnerRogainingReduction";

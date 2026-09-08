@@ -1613,6 +1613,51 @@ void oCourse::getNameAndFamily(wstring& name, wstring& family) const {
   }
 }
 
+wstring oCourse::getFamilyName() const {
+  wstring cName, family;
+  getNameAndFamily(cName, family);
+  return family.empty() ? name : family;
+}
+
+int oCourse::getResultCourseId() const {
+  if (!resultCourseId.needsUpdate(*oe))
+    return resultCourseId.get();
+
+  vector<pCourse> crs;
+  oe->getCourses(crs);
+
+  // Family -> id of the first (lowest id) course of that family
+  map<wstring, int> familyFirstCourse;
+
+  if (oe->mergeCourseFamilies()) {
+    for (pCourse c : crs) {
+      wstring cName, family;
+      c->getNameAndFamily(cName, family);
+      if (family.empty())
+        continue;
+      if (auto res = familyFirstCourse.emplace(family, c->getId()); !res.second)
+        res.first->second = min(res.first->second, c->getId());
+    }
+  }
+
+  for (pCourse c : crs) {
+    int id = c->getId();
+    if (!familyFirstCourse.empty()) {
+      wstring cName, family;
+      c->getNameAndFamily(cName, family);
+      auto res = familyFirstCourse.find(family);
+      if (res != familyFirstCourse.end())
+        id = res->second;
+    }
+    c->resultCourseId.update(*oe, id);
+  }
+
+  if (resultCourseId.needsUpdate(*oe))
+    resultCourseId.update(*oe, getId()); // Not part of the competition's courses
+
+  return resultCourseId.get();
+}
+
 int oCourse::getBestTime() const {
   if (!bestTime.needsUpdate(*oe))
     return bestTime.get();
@@ -1626,7 +1671,7 @@ int oCourse::getBestTime() const {
     pCourse crs = r->getCourse(false);
     if (crs && r->isStatusOK(false, false) && !r->noTiming()) {
       int rt = r->getRunningTime(false);
-      if (auto res = bestTimes.emplace(crs->getId(), rt); !res.second) {
+      if (auto res = bestTimes.emplace(crs->getResultCourseId(), rt); !res.second) {
         res.first->second = min(res.first->second, rt);
       }
     }
@@ -1636,7 +1681,7 @@ int oCourse::getBestTime() const {
   oe->getCourses(crs);
 
   for (pCourse c : crs) {
-    auto res = bestTimes.find(c->getId());
+    auto res = bestTimes.find(c->getResultCourseId());
     if (res != bestTimes.end())
       c->bestTime.update(*oe, res->second);
     else
