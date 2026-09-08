@@ -6923,6 +6923,10 @@ void oEvent::supportSubSeconds(bool use) {
   getDI().setInt("SubSeconds", use ? 1 : 0);
 }
 
+bool oEvent::mergeCourseFamilies() const {
+  return getMeOSFeatures().hasFeature(MeOSFeatures::MergeCourseVariants);
+}
+
 void oEvent::getPayModes(vector<pair<wstring, size_t>> &modes) {
   modes.clear();
   modes.reserve(10);

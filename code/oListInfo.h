@@ -115,6 +115,7 @@ enum EPostType {
   lRunnerRank,
   lRunnerRankScore,
   lRunnerCourse,
+  lRunnerCourseFamily,
   lRunnerRogainingPoint,
   lRunnerRogainingPointTotal,
   lRunnerRogainingPointReduction,

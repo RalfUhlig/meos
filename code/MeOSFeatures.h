@@ -51,6 +51,7 @@ public:
     Bib,
     RunnerDb,
     NoCourses,
+    MergeCourseVariants,
   };
 
 private:

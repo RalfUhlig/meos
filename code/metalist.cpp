@@ -2251,6 +2251,7 @@ void MetaList::initSymbols() {
     typeToSymbol[lRunnerRank] = L"RunnerRank";
     typeToSymbol[lRunnerRankScore] = L"RunnerRankScore";
     typeToSymbol[lRunnerCourse] = L"RunnerCourse";
+    typeToSymbol[lRunnerCourseFamily] = L"RunnerCourseFamily";
     typeToSymbol[lRunnerRogainingPoint] = L"RunnerRogainingPoint";
     typeToSymbol[lRunnerRogainingPointTotal] = L"RunnerRogainingPointTotal";
     typeToSymbol[lRunnerRogainingPointReduction] = L"RunnerRogainingReduction";
