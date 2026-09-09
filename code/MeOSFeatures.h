@@ -52,7 +52,6 @@ public:
     RunnerDb,
     NoCourses,
     MergeCourseVariants,
-    SecondRaceEntry,
   };
 
 private:

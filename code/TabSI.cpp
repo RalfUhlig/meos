@@ -1095,51 +1095,6 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
       activeSIC.clear(&activeSIC);
       processCard(gdi, r, copy);
     }
-    else if (bi.id == "SecondRaceSI") {
-      // The competitor runs another course with the same card. Keep the existing
-      // result and read the card into a new entry.
-      if (!gEvent->useSecondRaceEntry())
-        return 0;
-
-      ListBoxInfo lbi;
-      gdi.getSelectedItem("Classes", lbi);
-
-      if (lbi.data == 0 || lbi.data == -1) {
-        gdi.alert("Du måste välja en klass");
-        return 0;
-      }
-
-      DWORD rid;
-      pRunner rOld = nullptr;
-      if (gdi.getData("RunnerId", rid) && rid > 0)
-        rOld = gEvent->getRunner(rid, 0);
-
-      if (!rOld)
-        return 0;
-
-      pRunner r = gEvent->addSecondRaceEntry(rOld, lbi.data);
-
-      gdi.restore();
-      SICard copy = activeSIC;
-      activeSIC.clear(&activeSIC);
-      processCard(gdi, r, copy);
-    }
-    else if (bi.id == "SecondRaceUnmatched") {
-      // Same as SecondRaceSI, but reached from the unmatched-card dialog, which has
-      // no class selection. createMultipleStartEntry picks the class from the punches
-      // and applies the name numbering.
-      if (!gEvent->useSecondRaceEntry())
-        return 0;
-
-      SICard copy = activeSIC;
-      pRunner r = createMultipleStartEntry(copy);
-      if (!r)
-        return 0;
-
-      gdi.restore();
-      activeSIC.clear(&activeSIC);
-      processCard(gdi, r, copy);
-    }
     else if (bi.id == "EntryOK") {
       storedInfo.clear();
       oe->synchronizeList({ oListId::oLRunnerId, oListId::oLCardId });
@@ -3003,15 +2958,6 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     gdi.dropLine();
     gdi.setRestorePoint("restOK1");
     gdi.addButton("OK1", "OK", SportIdentCB).setDefault();
-
-    // A real second race carries new punch data, so it does not count as "read
-    // before" and no entry is waiting for readout -- the card lands here. Offer
-    // the additional entry when the number does belong to someone.
-    if (pRunner srcRunner = oe->useSecondRaceEntry() ? findSecondRaceSource(sic) : nullptr) {
-      gdi.addButton("SecondRaceUnmatched", L"Nytt lopp för X#" + srcRunner->getName(), SportIdentCB,
-                    L"Skapa en ny anmälan och läs in brickan där. Det tidigare resultatet behålls.");
-    }
-
     gdi.addButton("SaveUnpaired", "Spara oparad bricka", SportIdentCB);
     gdi.fillDown();
     gdi.addButton("Cancel", "Avbryt inläsning", SportIdentCB).setCancel();
@@ -3068,14 +3014,9 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
 
     gdi.dropLine();
 
-    if (hasResult && oe->useSecondRaceEntry()) {
-      // Preserving the existing result is the safe action, and thus the default one.
-      gdi.addButton("SecondRaceSI", L"Nytt lopp för deltagaren", SportIdentCB,
-                    L"Skapa en ny anmälan och läs in brickan där. Det tidigare resultatet behålls.").setDefault();
-      gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB);
-    }
-    else if (hasResult) {
-      // No alternative to offer, but askOverwriteCard still guards the click.
+    if (hasResult) {
+      // Reading the card replaces the existing result, but askOverwriteCard
+      // guards the click.
       gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB).setDefault();
     }
     else {

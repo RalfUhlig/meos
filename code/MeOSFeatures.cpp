@@ -44,7 +44,6 @@ MeOSFeatures::MeOSFeatures(void)
   add(SeveralStages, L"ST", "Several stages");
   add(Economy, L"EC", "Economy and fees").require(EditClub).require(Clubs);
   add(Vacancy, L"VA", "Vacancies and entry cancellations").require(DrawStartList);
-  add(SecondRaceEntry, L"AR", "Additional race for a competitor");
   add(TimeAdjust, L"TA", "Manual time penalties and adjustments");
   add(RunnerDb, L"RD", "Club and runner database").require(Clubs);
   addHead("Teams and forking");
