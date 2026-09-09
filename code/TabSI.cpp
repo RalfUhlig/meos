@@ -2850,17 +2850,7 @@ pRunner TabSI::createMultipleStartEntry(SICard &sic) {
   if (classes.size() == 1)
     classId = classes[0]->getId();
 
-  pRunner r = oe->addSecondRaceEntry(rOld, classId);
-
-  if (r && classId != rOld->getClassId(false)) {
-    // Another class than the earlier entry. Keep the plain name, without a number.
-    wstring base;
-    extractEntryNumber(rOld->getNameRaw(), base);
-    r->setName(base, true);
-    r->synchronize(true);
-  }
-
-  return r;
+  return oe->addSecondRaceEntry(rOld, classId);
 }
 
 pRunner TabSI::getRunnerForCardSplitPrint(const SICard& sic) const {
