@@ -51,6 +51,7 @@ public:
     Bib,
     RunnerDb,
     NoCourses,
+    SecondRaceEntry,
   };
 
 private:

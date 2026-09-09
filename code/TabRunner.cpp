@@ -1114,7 +1114,7 @@ int TabRunner::runnerCB(gdioutput &gdi, GuiEventType type, BaseInfo* data) {
       gdi.setInputFocus("Name", true);
     }
     else if (bi.id=="SecondRace") {
-      if (runnerId == 0)
+      if (runnerId == 0 || !oe->useSecondRaceEntry())
         return 0;
 
       save(gdi, runnerId, true);
@@ -3557,8 +3557,10 @@ bool TabRunner::loadPage(gdioutput &gdi)
   gdi.popX();
   gdi.dropLine(2.2);
   gdi.addButton("EditAnnotation", L"Kommentar >>", RunnerCB, L"Lägg till eller redigera kommentarer om deltagaren.");
-  gdi.addButton("SecondRace", L"Nytt lopp", RunnerCB,
-                L"Skapa en ny anmälan för samma person, för ytterligare ett lopp med samma bricka.");
+  if (oe->useSecondRaceEntry()) {
+    gdi.addButton("SecondRace", L"Nytt lopp", RunnerCB,
+                  L"Skapa en ny anmälan för samma person, för ytterligare ett lopp med samma bricka.");
+  }
 
   enableControlButtons(gdi, false, false);
   gdi.fillDown();

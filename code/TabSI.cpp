@@ -1098,6 +1098,9 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
     else if (bi.id == "SecondRaceSI") {
       // The competitor runs another course with the same card. Keep the existing
       // result and read the card into a new entry.
+      if (!gEvent->useSecondRaceEntry())
+        return 0;
+
       ListBoxInfo lbi;
       gdi.getSelectedItem("Classes", lbi);
 
@@ -3032,11 +3035,15 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
 
     gdi.dropLine();
 
-    if (hasResult) {
+    if (hasResult && oe->useSecondRaceEntry()) {
       // Preserving the existing result is the safe action, and thus the default one.
       gdi.addButton("SecondRaceSI", L"Nytt lopp för deltagaren", SportIdentCB,
                     L"Skapa en ny anmälan och läs in brickan där. Det tidigare resultatet behålls.").setDefault();
       gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB);
+    }
+    else if (hasResult) {
+      // No alternative to offer, but askOverwriteCard still guards the click.
+      gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB).setDefault();
     }
     else {
       gdi.addButton("OK4", "OK", SportIdentCB).setDefault();
