@@ -1124,6 +1124,22 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
       activeSIC.clear(&activeSIC);
       processCard(gdi, r, copy);
     }
+    else if (bi.id == "SecondRaceUnmatched") {
+      // Same as SecondRaceSI, but reached from the unmatched-card dialog, which has
+      // no class selection. createMultipleStartEntry picks the class from the punches
+      // and applies the name numbering.
+      if (!gEvent->useSecondRaceEntry())
+        return 0;
+
+      SICard copy = activeSIC;
+      pRunner r = createMultipleStartEntry(copy);
+      if (!r)
+        return 0;
+
+      gdi.restore();
+      activeSIC.clear(&activeSIC);
+      processCard(gdi, r, copy);
+    }
     else if (bi.id == "EntryOK") {
       storedInfo.clear();
       oe->synchronizeList({ oListId::oLRunnerId, oListId::oLCardId });
@@ -2863,11 +2879,19 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
   }
 }
 
+pRunner TabSI::findSecondRaceSource(const SICard &sic) const {
+  // The lookup needs relative punch times, so work on a copy. convertTimes is
+  // idempotent, so a card that was already converted is left alone.
+  SICard probe = sic;
+  oe->convertTimes(nullptr, probe);
+  return oe->getRunnerByCardNo(probe.CardNumber, probe.getFirstTime(),
+                               oEvent::CardLookupProperty::Any);
+}
+
 pRunner TabSI::createMultipleStartEntry(SICard &sic) {
   // Convert punch times to relative times.
   oe->convertTimes(nullptr, sic);
-  int time = sic.getFirstTime();
-  pRunner rOld = oe->getRunnerByCardNo(sic.CardNumber, time, oEvent::CardLookupProperty::Any);
+  pRunner rOld = findSecondRaceSource(sic);
 
   if (!rOld)
     return nullptr;
@@ -2979,6 +3003,15 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     gdi.dropLine();
     gdi.setRestorePoint("restOK1");
     gdi.addButton("OK1", "OK", SportIdentCB).setDefault();
+
+    // A real second race carries new punch data, so it does not count as "read
+    // before" and no entry is waiting for readout -- the card lands here. Offer
+    // the additional entry when the number does belong to someone.
+    if (pRunner srcRunner = oe->useSecondRaceEntry() ? findSecondRaceSource(sic) : nullptr) {
+      gdi.addButton("SecondRaceUnmatched", L"Nytt lopp för X#" + srcRunner->getName(), SportIdentCB,
+                    L"Skapa en ny anmälan och läs in brickan där. Det tidigare resultatet behålls.");
+    }
+
     gdi.addButton("SaveUnpaired", "Spara oparad bricka", SportIdentCB);
     gdi.fillDown();
     gdi.addButton("Cancel", "Avbryt inläsning", SportIdentCB).setCancel();
