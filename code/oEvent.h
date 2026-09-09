@@ -697,6 +697,9 @@ public:
   void updateTabs(bool force = false, bool hide = false) const;
   bool useRunnerDb() const;
 
+  /** True if a competitor may be entered again, for another race with the same card. */
+  bool useSecondRaceEntry() const;
+
   int getFirstClassId(bool teamClass) const;
 
   void generateCompetitionReport(gdioutput &gdi);

@@ -1098,6 +1098,9 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
     else if (bi.id == "SecondRaceSI") {
       // The competitor runs another course with the same card. Keep the existing
       // result and read the card into a new entry.
+      if (!gEvent->useSecondRaceEntry())
+        return 0;
+
       ListBoxInfo lbi;
       gdi.getSelectedItem("Classes", lbi);
 
@@ -1118,6 +1121,22 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
 
       gdi.restore();
       SICard copy = activeSIC;
+      activeSIC.clear(&activeSIC);
+      processCard(gdi, r, copy);
+    }
+    else if (bi.id == "SecondRaceUnmatched") {
+      // Same as SecondRaceSI, but reached from the unmatched-card dialog, which has
+      // no class selection. createMultipleStartEntry picks the class from the punches
+      // and applies the name numbering.
+      if (!gEvent->useSecondRaceEntry())
+        return 0;
+
+      SICard copy = activeSIC;
+      pRunner r = createMultipleStartEntry(copy);
+      if (!r)
+        return 0;
+
+      gdi.restore();
       activeSIC.clear(&activeSIC);
       processCard(gdi, r, copy);
     }
@@ -2860,11 +2879,19 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
   }
 }
 
+pRunner TabSI::findSecondRaceSource(const SICard &sic) const {
+  // The lookup needs relative punch times, so work on a copy. convertTimes is
+  // idempotent, so a card that was already converted is left alone.
+  SICard probe = sic;
+  oe->convertTimes(nullptr, probe);
+  return oe->getRunnerByCardNo(probe.CardNumber, probe.getFirstTime(),
+                               oEvent::CardLookupProperty::Any);
+}
+
 pRunner TabSI::createMultipleStartEntry(SICard &sic) {
   // Convert punch times to relative times.
   oe->convertTimes(nullptr, sic);
-  int time = sic.getFirstTime();
-  pRunner rOld = oe->getRunnerByCardNo(sic.CardNumber, time, oEvent::CardLookupProperty::Any);
+  pRunner rOld = findSecondRaceSource(sic);
 
   if (!rOld)
     return nullptr;
@@ -2976,6 +3003,15 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     gdi.dropLine();
     gdi.setRestorePoint("restOK1");
     gdi.addButton("OK1", "OK", SportIdentCB).setDefault();
+
+    // A real second race carries new punch data, so it does not count as "read
+    // before" and no entry is waiting for readout -- the card lands here. Offer
+    // the additional entry when the number does belong to someone.
+    if (pRunner srcRunner = oe->useSecondRaceEntry() ? findSecondRaceSource(sic) : nullptr) {
+      gdi.addButton("SecondRaceUnmatched", L"Nytt lopp för X#" + srcRunner->getName(), SportIdentCB,
+                    L"Skapa en ny anmälan och läs in brickan där. Det tidigare resultatet behålls.");
+    }
+
     gdi.addButton("SaveUnpaired", "Spara oparad bricka", SportIdentCB);
     gdi.fillDown();
     gdi.addButton("Cancel", "Avbryt inläsning", SportIdentCB).setCancel();
@@ -3032,15 +3068,26 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
 
     gdi.dropLine();
 
-    if (hasResult) {
+    if (hasResult && oe->useSecondRaceEntry()) {
       // Preserving the existing result is the safe action, and thus the default one.
       gdi.addButton("SecondRaceSI", L"Nytt lopp för deltagaren", SportIdentCB,
                     L"Skapa en ny anmälan och läs in brickan där. Det tidigare resultatet behålls.").setDefault();
       gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB);
     }
+    else if (hasResult) {
+      // No alternative to offer, but askOverwriteCard still guards the click.
+      gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB).setDefault();
+    }
     else {
       gdi.addButton("OK4", "OK", SportIdentCB).setDefault();
     }
+
+    // An escape from this dialog. Historically it was only reached for a runner
+    // without a class, where continuing was always right. It is now also reached
+    // for a runner that already has a result, so not processing the card at all
+    // must remain possible.
+    gdi.addButton("SaveUnpaired", "Spara oparad bricka", SportIdentCB);
+    gdi.addButton("Cancel", "Avbryt inläsning", SportIdentCB).setCancel();
     gdi.fillDown();
 
     gdi.popX();

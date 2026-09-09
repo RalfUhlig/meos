@@ -6495,6 +6495,10 @@ bool oEvent::useRunnerDb() const {
   return getMeOSFeatures().hasFeature(MeOSFeatures::RunnerDb);
 }
 
+bool oEvent::useSecondRaceEntry() const {
+  return getMeOSFeatures().hasFeature(MeOSFeatures::SecondRaceEntry);
+}
+
 int oEvent::getBaseCardFee() const {
   int baseCardFee = oe->getDI().getInt("CardFee");
   if (baseCardFee == 0)
