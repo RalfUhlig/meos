@@ -3048,6 +3048,13 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     else {
       gdi.addButton("OK4", "OK", SportIdentCB).setDefault();
     }
+
+    // An escape from this dialog. Historically it was only reached for a runner
+    // without a class, where continuing was always right. It is now also reached
+    // for a runner that already has a result, so not processing the card at all
+    // must remain possible.
+    gdi.addButton("SaveUnpaired", "Spara oparad bricka", SportIdentCB);
+    gdi.addButton("Cancel", "Avbryt inläsning", SportIdentCB).setCancel();
     gdi.fillDown();
 
     gdi.popX();
