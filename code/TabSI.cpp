@@ -2777,17 +2777,10 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
 
   pRunner db_r = 0;
   if (sic.runnerId == 0) {
-    if (!readBefore) {
+    if (!readBefore)
       r = gEvent->getRunnerByCardNo(sic.CardNumber, 0, oEvent::CardLookupProperty::ForReadout);
-    }
-    else {
-      // The operator confirmed a re-read of an identical card above.
-      r = gEvent->getRunnerByCardNo(sic.CardNumber, 0, oEvent::CardLookupProperty::ForReadout);
-      if (!r && multipleStarts)
-        r = createMultipleStartEntry(sic);
-      if (!r)
-        r = getRunnerForCardSplitPrint(sic);
-    }
+    else
+      r = getRunnerForCardSplitPrint(sic);
 
     if (!r && showDatabase()) {
       //Look up in database.
