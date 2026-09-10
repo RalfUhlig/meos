@@ -2273,6 +2273,43 @@ wstring getFamilyName(const wstring &name) {
     return trim(name.substr(sp));
 }
 
+int extractEntryNumber(const wstring &name, wstring &baseName) {
+  wstring given = getGivenName(name);
+  wstring family = getFamilyName(name);
+
+  // The number is carried by the family name, or by the whole name when there is none.
+  wstring &numbered = family.empty() ? given : family;
+
+  int number = 1;
+  size_t ep = numbered.find_last_of(')');
+  size_t sp = numbered.find_last_of('(');
+
+  if (ep != wstring::npos && sp != wstring::npos && sp + 1 < ep && ep + 1 == numbered.length()) {
+    int num = _wtoi(numbered.c_str() + sp + 1);
+    if (num > 0) {
+      number = num;
+      numbered = trim(numbered.substr(0, sp));
+    }
+  }
+
+  baseName = family.empty() ? given : (family + L", " + given);
+  return number;
+}
+
+wstring composeEntryName(const wstring &baseName, int number) {
+  if (number <= 1)
+    return baseName;
+
+  wstring given = getGivenName(baseName);
+  wstring family = getFamilyName(baseName);
+  wstring suffix = L" (" + itow(number) + L")";
+
+  if (family.empty())
+    return given + suffix;
+
+  return family + suffix + L", " + given;
+}
+
 static bool noCapitalize(const wstring &str, size_t pos) {
   string word;
   while (pos < str.length() && !myIsSpace(str[pos])) {

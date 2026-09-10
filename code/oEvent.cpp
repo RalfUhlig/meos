@@ -2136,6 +2136,25 @@ wstring oEvent::getAutoRunnerName() const
   return bf;
 }
 
+wstring oEvent::getNextEntryName(const wstring &name) const {
+  wstring base;
+  int number = extractEntryNumber(name, base);
+
+  set<wstring> usedNames;
+  for (auto &r : Runners) {
+    if (!r.isRemoved())
+      usedNames.insert(r.getNameRaw());
+  }
+
+  wstring candidate;
+  do {
+    candidate = composeEntryName(base, ++number);
+  }
+  while (usedNames.count(candidate) > 0);
+
+  return candidate;
+}
+
 int oEvent::getFreeClubId()
 {
   qFreeClubId++;

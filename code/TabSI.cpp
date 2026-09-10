@@ -2673,25 +2673,10 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
         if (classes.size() == 1)
           classId = classes[0]->getId();
 
-        wstring given = rOld->getGivenName();
-        wstring family = rOld->getFamilyName();
-        size_t ep = family.find_last_of(')');
-        size_t sp = family.find_last_of('(');
-
-        int num = 1;
-        if (ep != string::npos && sp != string::npos && sp + 1 < ep) {
-          num = _wtoi(family.data() + sp + 1);
-          if (num > 0) {
-            family = trim(family.substr(0, ep - 2));
-          }
-        }
-        if (classId == rOld->getClassId(false))
-          family +=  + L" (" + itow(num + 1) + L")";
-
         r = oe->addRunner(L"tmp", rOld->getClub(),
           classId, sic.CardNumber, rOld->getBirthDate(), false);
 
-        r->setName(family + L", " + given, true);
+        r->setName(oe->getNextEntryName(rOld->getNameRaw()), true);
         r->setFlag(oAbstractRunner::TransferFlags::FlagNoDatabase, true);
       }
     }

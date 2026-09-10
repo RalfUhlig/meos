@@ -1228,7 +1228,10 @@ public:
 
 
   wstring getAutoRunnerName() const;
-  
+
+  /** Get a unique name for an additional entry of the same person, e.g. "Ek (2), Anna". */
+  wstring getNextEntryName(const wstring &name) const;
+
   pRunner addRunner(const wstring &pname, int clubId, int classId,
                     int cardNo, const wstring &birthDate, bool autoAdd);
 

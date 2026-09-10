@@ -286,6 +286,14 @@ wstring getGivenName(const wstring &name);
 /** Split a name into Given, Family, and return Family.*/
 wstring getFamilyName(const wstring &name);
 
+/** Split a name of the form "Ek (2), Anna" into the base name ("Ek, Anna")
+    and the entry number. Returns 1 when the name carries no number. */
+int extractEntryNumber(const wstring &name, wstring &baseName);
+
+/** Compose an entry name by numbering the family name:
+    ("Ek, Anna", 2) -> "Ek (2), Anna". A number <= 1 returns baseName. */
+wstring composeEntryName(const wstring &baseName, int number);
+
 /** Simple file locking class to prevent opening in different MeOS session. */
 class MeOSFileLock {
   HANDLE lockedFile;
