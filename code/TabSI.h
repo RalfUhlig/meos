@@ -55,10 +55,6 @@ private:
 
   pRunner autoMatch(const SICard &sic, pRunner db_r);
 
-  /** The earlier runner an additional entry would be derived from, or nullptr
-      if the card number belongs to nobody. Does not modify sic. */
-  pRunner findSecondRaceSource(const SICard &sic) const;
-
   /** Create a new, independent entry for a competitor doing another start with the
       same card. Returns nullptr if there is no earlier runner with that card. */
   pRunner createMultipleStartEntry(SICard &sic);

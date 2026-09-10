@@ -2827,20 +2827,11 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
   }
 }
 
-pRunner TabSI::findSecondRaceSource(const SICard &sic) const {
-  // The lookup needs relative punch times, so work on a copy. convertTimes is
-  // idempotent, so a card that was already converted is left alone.
-  SICard probe = sic;
-  oe->convertTimes(nullptr, probe);
-  return oe->getRunnerByCardNo(probe.CardNumber, probe.getFirstTime(),
-                               oEvent::CardLookupProperty::Any);
-}
-
 pRunner TabSI::createMultipleStartEntry(SICard &sic) {
   // Convert punch times to relative times.
   oe->convertTimes(nullptr, sic);
-  pRunner rOld = findSecondRaceSource(sic);
-
+  pRunner rOld = oe->getRunnerByCardNo(sic.CardNumber, sic.getFirstTime(),
+                                       oEvent::CardLookupProperty::Any);
   if (!rOld)
     return nullptr;
 
