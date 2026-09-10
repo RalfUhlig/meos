@@ -1084,6 +1084,10 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
         r = gEvent->getRunner(rid, 0);
       else r = gEvent->addRunner(lang.tl(L"Oparad bricka"), lang.tl("Okänd"), 0, 0, L"", false);
 
+      // Changing class and reading the card replaces an existing result. Ask first.
+      if (r && r->getCard() && !askOverwriteCard(gdi, r))
+        return 0;
+
       r->setClassId(lbi.data, true);
 
       gdi.restore();
@@ -2960,12 +2964,22 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     //Process this card.
     activeSIC = sic;
 
-    //No class. Select...
+    //No class, or an existing result. Select...
     gdi.setRestorePoint();
 
+    // This branch is also reached for a runner that has a class but already a read card.
+    const bool hasResult = r->getCard() != nullptr;
+
     wchar_t bf[256];
-    swprintf_s(bf, 256, L"SI X inläst. Brickan tillhör Y som saknar klass.#%d#%s",
-      sic.CardNumber, r->getName().c_str());
+    if (hasResult)
+      swprintf_s(bf, 256, L"SI X inläst. Y har redan ett inläst resultat i klassen Z.#%d#%s#%s",
+        sic.CardNumber, r->getName().c_str(), r->getClass(true).c_str());
+    else if (r->getClassId(false))
+      swprintf_s(bf, 256, L"SI X inläst. Bekräfta klass för Y.#%d#%s",
+        sic.CardNumber, r->getName().c_str());
+    else
+      swprintf_s(bf, 256, L"SI X inläst. Brickan tillhör Y som saknar klass.#%d#%s",
+        sic.CardNumber, r->getName().c_str());
 
     gdi.dropLine();
     gdi.addString("", 1, bf);
@@ -2976,15 +2990,36 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     gdi.addSelection("Classes", 200, 300, 0, L"Klass:");
     gEvent->fillClasses(gdi, "Classes", {}, oEvent::extraNone, oEvent::filterNone);
     gdi.setInputFocus("Classes");
-    //Find matching class...
-    vector<pClass> classes;
-    gEvent->findBestClass(sic, classes);
-    if (classes.size() > 0)
-      gdi.selectItemByData("Classes", classes[0]->getId());
+
+    if (r->getClassId(false)) {
+      // The runner has a class. Do not overrule it by a guess from the card.
+      gdi.selectItemByData("Classes", r->getClassId(false));
+    }
+    else {
+      //Find matching class...
+      vector<pClass> classes;
+      gEvent->findBestClass(sic, classes);
+      if (classes.size() > 0)
+        gdi.selectItemByData("Classes", classes[0]->getId());
+    }
 
     gdi.dropLine();
 
-    gdi.addButton("OK4", "OK", SportIdentCB).setDefault();
+    if (hasResult) {
+      // Reading the card replaces the existing result, but askOverwriteCard
+      // guards the click.
+      gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB).setDefault();
+    }
+    else {
+      gdi.addButton("OK4", "OK", SportIdentCB).setDefault();
+    }
+
+    // An escape from this dialog. Historically it was only reached for a runner
+    // without a class, where continuing was always right. It is now also reached
+    // for a runner that already has a result, so not processing the card at all
+    // must remain possible.
+    gdi.addButton("SaveUnpaired", "Spara oparad bricka", SportIdentCB);
+    gdi.addButton("Cancel", "Avbryt inläsning", SportIdentCB).setCancel();
     gdi.fillDown();
 
     gdi.popX();
