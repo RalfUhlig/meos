@@ -2886,7 +2886,9 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     gdi.fillDown();
     gdi.dropLine();
     char bf[256];
-    sprintf_s(bf, 256, "SI X inläst. Brickan är inte knuten till någon löpare (i skogen).#%d", sic.CardNumber);
+    // No period after the closing parenthesis: the localizer trims ")" together with "."
+    // as a trailing suffix, which would make the lookup miss the translation entry.
+    sprintf_s(bf, 256, "SI X inläst. Brickan är inte knuten till någon löpare (i skogen)#%d", sic.CardNumber);
 
     gdi.dropLine();
     gdi.addString("", 1, bf);
