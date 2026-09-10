@@ -2058,6 +2058,61 @@ pRunner oEvent::addRunnerVacant(int classId) {
   return r;
 }
 
+pRunner oEvent::addSecondRaceEntry(pRunner src, int classId) {
+  if (!src)
+    return nullptr;
+
+  if (src->tParentRunner)
+    src = src->tParentRunner; // Always start out from the main race record
+
+  // Build a fresh runner. Note that a copy of src must not be used: addRunner would
+  // take over the read card (Card->tOwner) and thus the result of the first race.
+  oRunner r(this);
+  r.sName = getNextEntryName(src->getNameRaw());
+  r.getRealName(r.sName, r.tRealName);
+  r.Club = src->Club;
+
+  pRunner pr = addRunner(r, true);
+  pr->cloneData(src); // memcpy of the oData block. Must be done before any setter below.
+
+  oDataInterface di = pr->getDI();
+  di.setInt("Fee", 0);
+  di.setInt("CardFee", 0); // A rental card is paid for with the first entry only
+  di.setInt("Paid", 0);
+  di.setInt("Taxable", 0);
+  di.setString("Bib", L"");
+  di.setInt64("ExtId", 0);
+  di.setInt64("ExtId2", 0);
+  di.setInt("RaceId", 0);
+  di.setInt("Reference", 0);
+  di.setInt("EntrySource", 0); // Otherwise a repeated entry import would remove the runner
+  di.setInt("DrawnTime", 0);
+  di.setInt("TimeAdjust", 0);
+  di.setInt("PointAdjust", 0);
+  di.setInt("Shorten", 0);
+  di.setInt("Rank", 0);
+  di.setDate("EntryDate", getLocalDate());
+  di.setInt("EntryTime", getLocalAbsTime());
+
+  pr->setFlag(oRunner::TransferFlags::FlagFeeSpecified, false);
+  pr->setFlag(oRunner::TransferFlags::FlagAutoDNS, false);
+  pr->setFlag(oRunner::TransferFlags::FlagAddedViaAPI, false);
+  pr->setFlag(oRunner::TransferFlags::FlagUnnamed, false);
+  pr->setFlag(oRunner::TransferFlags::FlagNoDatabase, true);
+
+  pr->setClassId(classId > 0 ? classId : src->getClassId(false), false);
+  pr->setCourseId(0); // The course is defined by the class of the new race
+
+  // Share the card number with the first race. The card (oCard) itself stays with the
+  // first race, which makes getRunnerByCardNo/nextNeedReadout select this entry on the
+  // next readout. matchCard must be false to avoid grabbing an unpaired card.
+  pr->setCardNo(src->getCardNo(), false, false);
+
+  pr->updateChanged();
+  pr->synchronize(true);
+  return pr;
+}
+
 int oEvent::getFreeCourseId()
 {
   qFreeCourseId++;

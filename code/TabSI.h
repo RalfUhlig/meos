@@ -54,6 +54,11 @@ private:
   void checkMoreCardsInQueue(gdioutput &gdi);
 
   pRunner autoMatch(const SICard &sic, pRunner db_r);
+
+  /** Create a new, independent entry for a competitor doing another start with the
+      same card. Returns nullptr if there is no earlier runner with that card. */
+  pRunner createMultipleStartEntry(SICard &sic);
+
   void processPunchOnly(gdioutput &gdi, const SICard &sic);
   void startInteractive(gdioutput &gdi, const SICard &sic,
                         pRunner r, pRunner db_r);

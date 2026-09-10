@@ -2659,27 +2659,8 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
   if (sic.runnerId == 0) {
     r = oe->getRunnerByCardNo(sic.CardNumber, 0, oEvent::CardLookupProperty::ForReadout);
 
-    if (!r && multipleStarts && !oe->isCardRead(sic)) {
-      // Convert punch times to relative times.
-      oe->convertTimes(nullptr, sic);
-      int time = sic.getFirstTime();
-      pRunner rOld = oe->getRunnerByCardNo(sic.CardNumber, time, oEvent::CardLookupProperty::Any);
-
-      if (rOld) {
-        // New entry
-        vector<pClass> classes;
-        oe->findBestClass(sic, classes);
-        int classId = rOld->getClassId(false);
-        if (classes.size() == 1)
-          classId = classes[0]->getId();
-
-        r = oe->addRunner(L"tmp", rOld->getClub(),
-          classId, sic.CardNumber, rOld->getBirthDate(), false);
-
-        r->setName(oe->getNextEntryName(rOld->getNameRaw()), true);
-        r->setFlag(oAbstractRunner::TransferFlags::FlagNoDatabase, true);
-      }
-    }
+    if (!r && multipleStarts && !oe->isCardRead(sic))
+      r = createMultipleStartEntry(sic);
   }
   else {
     r = gEvent->getRunner(sic.runnerId, 0);
@@ -2844,6 +2825,23 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
       processUnmatched(gdi, sic, !pageLoaded);
     }
   }
+}
+
+pRunner TabSI::createMultipleStartEntry(SICard &sic) {
+  // Convert punch times to relative times.
+  oe->convertTimes(nullptr, sic);
+  pRunner rOld = oe->getRunnerByCardNo(sic.CardNumber, sic.getFirstTime(),
+                                       oEvent::CardLookupProperty::Any);
+  if (!rOld)
+    return nullptr;
+
+  vector<pClass> classes;
+  oe->findBestClass(sic, classes);
+  int classId = rOld->getClassId(false);
+  if (classes.size() == 1)
+    classId = classes[0]->getId();
+
+  return oe->addSecondRaceEntry(rOld, classId);
 }
 
 pRunner TabSI::getRunnerForCardSplitPrint(const SICard& sic) const {
