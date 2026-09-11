@@ -843,7 +843,7 @@ void oCourse::setLegLengths(const vector<int> &legs) {
     }
   }
   else
-    throw std::exception("Invalid parameter value");
+    throw std::runtime_error("Invalid parameter value");
 }
 
 double oCourse::getPartOfCourse(int start, int end) const {

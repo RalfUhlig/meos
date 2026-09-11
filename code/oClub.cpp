@@ -933,7 +933,7 @@ void oEvent::printInvoices(gdioutput &gdi, InvoicePrintType type,
     std::ofstream fout;
 
     if (type == IPTElectronincHTML)
-      fout.open((path + L"invoices.txt").c_str());
+      fout.open(meosPath(path + L"invoices.txt"));
 
 
     for (it=Clubs.begin(); it != Clubs.end(); ++it) {

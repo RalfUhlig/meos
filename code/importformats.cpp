@@ -99,7 +99,7 @@ wstring ImportFormats::getExtension(ExportFormats fm) {
   case HTML:
     return L"html";
   }
-  throw std::exception();
+  throw std::runtime_error("Unknown exception");
 }
 
 

@@ -50,7 +50,7 @@ public:
   virtual pWordDatabase split() {return this;}
   virtual void insert(const wchar_t *s) = 0;
   virtual bool lookup(const wchar_t *s) const = 0;
-  virtual ~oWordDatabase() = 0 {}
+  virtual ~oWordDatabase() = default;
 };
 
 class oWordDB : public oWordDatabase {

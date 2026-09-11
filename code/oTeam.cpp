@@ -242,7 +242,7 @@ void oTeam::setRunner(unsigned i, pRunner r, bool sync)
     if (i>=0 && i<100)
       Runners.resize(i+1);
     else
-      throw std::exception("Bad runner index");
+      throw std::runtime_error("Bad runner index");
   }
 
   if (Runners[i] == r)
@@ -1167,7 +1167,7 @@ void oTeam::apply(ChangeType changeType, pRunner source) {
 
         if ((lt == LTParallel || lt == LTParallelOptional) && i == 0) {
           pc->setLegType(0, LTNormal);
-          throw std::exception("Första sträckan kan inte vara parallell.");
+          throw std::runtime_error("Första sträckan kan inte vara parallell.");
         }
         if (lt == LTIgnore || lt == LTExtra) {
           if (st != STDrawn)
@@ -2224,7 +2224,7 @@ pair<int, bool> oTeam::inputData(int id, const wstring &input,
       apply(ChangeType::Update, nullptr);
       s = getStartTime();
       if (s != t)
-        throw std::exception("Starttiden är definerad genom klassen eller löparens startstämpling.");
+        throw std::runtime_error("Starttiden är definerad genom klassen eller löparens startstämpling.");
       synchronize(true);
       output = getStartTimeS();
     break;

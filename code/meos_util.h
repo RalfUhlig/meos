@@ -251,13 +251,13 @@ bool isNumber(const wstring &s);
 
 bool isAscii(const string &s);
 bool isNumber(const string &s);
-int convertDynamicBase(const wstring &s, long long &out);
+int convertDynamicBase(const wstring &s, int64_t &out);
 void convertDynamicBase(long long val, int base, wchar_t out[16]);
 
 /// Find all files in dir matching given file pattern
 bool expandDirectory(const wchar_t *dir, const wchar_t *pattern, vector<wstring> &res);
 
-enum PersonSex {sFemale = 1, sMale, sBoth, sUnknown};
+enum PersonSex : int {sFemale = 1, sMale, sBoth, sUnknown};
 
 PersonSex interpretSex(const wstring &sex);
 

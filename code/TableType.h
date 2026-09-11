@@ -58,7 +58,7 @@ public:
 };
 
 enum CellType { cellEdit, cellSelection, cellAction, cellCombo };
-enum KeyCommandCode;
+enum KeyCommandCode : int;
 
 class Table;
 typedef void (*GENERATETABLEDATA)(Table& table, void* ptr);

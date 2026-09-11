@@ -843,7 +843,7 @@ void RunnerDB::setDataDate(const string &date)
    int t = date.length()>11 ? convertAbsoluteTimeHMS(date.substr(11), -1) : 0;
 
    if (d<=0)
-     throw std::exception("Felaktigt datumformat");
+     throw std::runtime_error("Felaktigt datumformat");
 
    dataDate = d;
    if (t>0)
@@ -867,7 +867,7 @@ void RunnerDB::saveRunners(const wstring &file)
       _write(f, &rdb[0], rdb.size()*sizeof(RunnerDBEntry));
     _close(f);
   }
-  else throw std::exception("Could not save runner database.");
+  else throw std::runtime_error("Could not save runner database.");
 }
 
 void RunnerDB::loadClubs(const wstring &file)

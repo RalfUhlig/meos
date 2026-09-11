@@ -191,6 +191,9 @@ public:
     }
 };
 
+static void getStyle(const map< pair<gdiFonts, wstring>, pair<string, string>> &styles,
+                     const TextInfo &ti, const string &extraStyle, string &starttag, string &endtag);
+
 template<typename T, typename TI>
 void HTMLWriter::formatTL(ostream &fout,
                           ImageWriter& imageWriter,
@@ -576,9 +579,9 @@ void HTMLWriter::formatTable(std::ostream &fout,
 void HTMLWriter::writeHTML(gdioutput &gdi, const wstring &file, 
                            const wstring &title, int refreshTimeOut, double scale){
   checkWriteAccess(file);
-  ofstream fout(file.c_str());
+  ofstream fout(meosPath(file));
   if (fout.bad())
-    throw std::exception("Bad output stream");
+    throw std::runtime_error("Bad output stream");
   
   wchar_t drive[20];
   wchar_t dir[MAX_PATH];
@@ -641,10 +644,10 @@ void HTMLWriter::writeTableHTML(gdioutput &gdi,
                                 int refreshTimeOut, 
                                 double scale) {
   checkWriteAccess(file);
-  ofstream fout(file.c_str());
+  ofstream fout(meosPath(file));
 
   if (fout.bad())
-    return throw std::exception("Bad output stream");
+    return throw std::runtime_error("Bad output stream");
 
   wchar_t drive[20];
   wchar_t dir[MAX_PATH];
@@ -807,7 +810,7 @@ void HTMLWriter::enumTemplates(TemplateType type, vector<TemplateInfo> &descript
   for (wstring &fn : res) {
     TemplateInfo ti;
     bool userDefined = --userCounter >= 0;
-    ifstream file(fn);
+    ifstream file(meosPath(fn));
     string str;
     if (getline(file, str)) {
       if (str == "@MEOS EXPORT TEMPLATE" && getline(file, str)) {
@@ -933,7 +936,7 @@ string HTMLWriter::localize(const string &in) {
 }
 
 void HTMLWriter::read(const wstring &fileName) {
-  ifstream file(fileName);
+  ifstream file(meosPath(fileName));
   string dmy;
   string *acc = &dmy;
   string str;
@@ -1223,7 +1226,7 @@ void HTMLWriter::write(gdioutput &gdi, const wstring &file, const wstring &title
                        int rows, int cols, int time_ms, int margin, double scale) {
 
   checkWriteAccess(file);
-  ofstream fout(file.c_str());
+  ofstream fout(meosPath(file));
 
   wchar_t drive[20];
   wchar_t dir[MAX_PATH];
@@ -1261,7 +1264,7 @@ void HTMLWriter::write(gdioutput &gdi, ostream &fout, const wstring &title,
       }
 
       if (ix == -1)
-        throw std::exception("Internal error");
+        throw std::runtime_error("Internal error");
 
       shared_ptr<HTMLWriter> tmpl = make_shared<HTMLWriter>();
       tmpl->read(htmlTmpl[ix].file);
@@ -1310,7 +1313,7 @@ void HTMLWriter::ImageWriter::write(ostream& fout, const string& xp, const strin
       if (!destination.empty()) {
         auto& data = image.getRawData(imgId);
         wstring d = destination + img + L".png";
-        ofstream out(d, ofstream::out | ofstream::binary);
+        ofstream out(meosPath(d), ofstream::out | ofstream::binary);
         out.write((const char *)data.data(), data.size());
         savedFiles[imgId] = "L" + itos(imgId) + ".png";
       }

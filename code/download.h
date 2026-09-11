@@ -35,10 +35,10 @@
 #include <vector>
 typedef HANDLE HINTERNET;
 
-class dwException : public std::exception {
+class dwException : public std::runtime_error {
 public:
   int code;
-  dwException(const char *msg, int id) : std::exception(msg), code(id) {}
+  dwException(const char *msg, int id) : std::runtime_error(msg), code(id) {}
   virtual ~dwException() {}
 };
 

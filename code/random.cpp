@@ -27,7 +27,7 @@ static int _rbp=0;
 static int _rbinterval=1;
 
 const int PrimeBits=16381;
-unsigned short _rbsource[];
+extern unsigned short _rbsource[];
 
 void InitRanom(int offset, int interval)
 {

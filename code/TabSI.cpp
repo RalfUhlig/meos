@@ -668,7 +668,7 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
           }
           else {
             loadPage(gdi);
-            throw std::exception("Felaktigt filformat");
+            throw std::runtime_error("Felaktigt filformat");
           }
         }
         else {
@@ -6211,7 +6211,7 @@ void TabSI::showRequestStartTime(gdioutput& gdi) {
 void TabSI::requestStartTime(gdioutput& gdi, const SICard& sic) {
   shared_ptr<RequestStart> h = dynamic_pointer_cast<RequestStart, GuiHandler>(requestStartTimeHandler);
   if (!h)
-    throw std::exception("Internal error");
+    throw std::runtime_error("Internal error");
 
   h->handleCard(gdi, sic.CardNumber);
 }

@@ -917,6 +917,7 @@ void DrawOptimAlgo::optimizeStartOrder(DrawInfo& di,
           for (auto& [key, crs] : classesPerCourse) {
             out.push_back(crs.numTotal);
           }
+          return out;
         }
 
         /** Get approximation of minimal start depth for group with specified interval */
@@ -2419,13 +2420,13 @@ void oEvent::drawList(const vector<ClassDrawSpecification>& spec,
     pClass pc = getClass(spec[k].classID);
 
     if (!pc)
-      throw std::exception("Klass saknas");
+      throw std::runtime_error("Klass saknas");
 
     if (spec[k].vacances > 0 && pc->getClassType() == oClassRelay)
-      throw std::exception("Vakanser stöds ej i stafett.");
+      throw std::runtime_error("Vakanser stöds ej i stafett.");
 
     if (spec[k].vacances > 0 && (spec[k].leg > 0 || pc->getParentClass()))
-      throw std::exception("Det går endast att sätta in vakanser på sträcka 1.");
+      throw std::runtime_error("Det går endast att sätta in vakanser på sträcka 1.");
 
     if (size_t(spec[k].leg) < pc->legInfo.size()) {
       pc->setStartType(spec[k].leg, STDrawn, true); //Automatically change start method
@@ -2641,10 +2642,10 @@ void oEvent::drawListClumped(int ClassID, int FirstStart, int Interval, int Vaca
   pClass pc = getClass(ClassID);
 
   if (!pc)
-    throw std::exception("Klass saknas");
+    throw std::runtime_error("Klass saknas");
 
   if (Vacances > 0 && pc->getClassType() != oClassIndividual)
-    throw std::exception("Lottningsmetoden stöds ej i den här klassen.");
+    throw std::runtime_error("Lottningsmetoden stöds ej i den här klassen.");
 
   oRunnerList::iterator it;
   int nRunners = 0;
@@ -2840,12 +2841,12 @@ void oEvent::automaticDrawAll(gdioutput& gdi,
   }
 
   if (baseInterval<timeConstSecond || baseInterval>timeConstHour)
-    throw std::exception("Felaktigt tidsformat för intervall");
+    throw std::runtime_error("Felaktigt tidsformat för intervall");
 
   int iFirstStart = getRelativeTime(firstStart);
 
   if (iFirstStart <= 0)
-    throw std::exception("Felaktigt tidsformat för första start");
+    throw std::runtime_error("Felaktigt tidsformat för första start");
 
   double vacancy = _wtof(vacances.c_str()) / 100;
 
@@ -3069,7 +3070,7 @@ void oEvent::drawPersuitList(int classId, int firstTime, int restartTime,
   pClass pc = getClass(classId);
 
   if (!pc)
-    throw std::exception("Klass saknas");
+    throw std::runtime_error("Klass saknas");
 
   const int leg = 0;
   if (size_t(leg) < pc->legInfo.size()) {

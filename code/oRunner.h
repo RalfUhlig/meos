@@ -64,6 +64,8 @@ bool showResultTime(RunnerStatus st, int time) {
 
 #include "oSpeaker.h"
 
+class oListInfo;
+
 extern char RunnerStatusOrderMap[100];
 
 enum SortOrder {

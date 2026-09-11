@@ -45,6 +45,6 @@ public:
   }
 
   GuiHandler() {}
-  virtual ~GuiHandler() = 0 {}
+  virtual ~GuiHandler() = default;
   virtual void handle(gdioutput &gdi, BaseInfo &info, GuiEventType type) = 0;
 };

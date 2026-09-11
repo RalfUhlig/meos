@@ -60,11 +60,11 @@ class oDataContainer;
 class oListInfo;
 struct oListParam;
 struct oPrintPost;
-enum EStdListType;
+enum EStdListType : int;
 class oFreeImport;
 class oWordList;
 class ClassConfigInfo;
-enum EPostType;
+enum EPostType : int;
 struct SocketPunchInfo;
 class DirectSocket;
 template<class T, class KEY> class intkeymap;
@@ -210,7 +210,7 @@ struct TimeRunner;
 class CardSystem;
 struct PrintPostInfo;
 
-enum PropertyType {
+enum PropertyType : int {
   String,
   Integer,
   Boolean
@@ -589,7 +589,7 @@ public:
   bool hasAnyRestartTime() const;
 
   NameMode getNameMode() const {return currentNameMode;}
-  NameMode setNameMode(NameMode newNameMode) { currentNameMode = newNameMode; }
+  NameMode setNameMode(NameMode newNameMode) { currentNameMode = newNameMode; return currentNameMode; }
 
   /// Get new punches since firstTime
   void getLatestPunches(int firstTime, vector<const oFreePunch *> &punches) const;
@@ -1481,7 +1481,7 @@ public:
 
   /** Do some operation and disable (global) reevaluate/update */
   template<typename OP>
-  void noReevaluateOperation(OP& operation) {
+  void noReevaluateOperation(OP&& operation) {
     bool origState = disableRecalculate;
     disableRecalculate = true;
     try {

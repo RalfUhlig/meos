@@ -70,7 +70,7 @@ public:
 csvparser::~csvparser() = default;
 
 csvparser::CSV csvparser::iscsv(const wstring &file) {
-  ifstream fin(file);
+  ifstream fin(meosPath(file));
 
   if (!fin.good())
     return CSV::NoCSV;
@@ -440,7 +440,7 @@ bool csvparser::importOE_CSV(oEvent &event, const wstring &file) {
 bool csvparser::openOutput(const wstring &filename, bool writeUTF)
 {
   checkWriteAccess(filename);
-  fout.open(filename);
+  fout.open(meosPath(filename));
 
   if (fout.bad())
     return false;
@@ -1163,7 +1163,7 @@ bool csvparser::importCards(const oEvent &oe, const wstring &file, vector<SICard
 }
 
 void csvparser::parseUnicode(const wstring &file, list< vector<wstring> > &data) {
-  fin.open(file, ifstream::in | ifstream::binary);
+  fin.open(meosPath(file), ifstream::in | ifstream::binary);
   fin.seekg(0, ios_base::end);
   int len = int(fin.tellg())-2;
   if (len <= 0)
@@ -1208,7 +1208,7 @@ void csvparser::parseUnicode(const wstring &file, list< vector<wstring> > &data)
 void csvparser::parse(const wstring &file, list<vector<wstring>> &data) {
   data.clear();
 
-  fin.open(file);
+  fin.open(meosPath(file));
   
   fin.seekg(0, ios_base::end);
   auto flen = fin.tellg();
@@ -1284,7 +1284,7 @@ void csvparser::parse(const wstring &file, list<vector<wstring>> &data) {
 
 void csvparser::convertUTF(const wstring &file) {
   ifstream fin;
-  fin.open(file);
+  fin.open(meosPath(file));
   string rbf;
 
   if (!fin.good())
@@ -1311,7 +1311,7 @@ void csvparser::convertUTF(const wstring &file) {
   _wrename(file.c_str(), (file + L"_").c_str());
 
   ofstream fout;
-  fout.open(file);
+  fout.open(meosPath(file));
   fout.put(-17);
   fout.put(-69);
   fout.put(-65);

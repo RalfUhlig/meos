@@ -366,7 +366,7 @@ bool oEvent::connectToMySQL(const string &server, const string &user, const stri
 bool oEvent::uploadSynchronize()
 {
   if (isThreadReconnecting())
-    throw std::exception("Internt fel i anslutningen. Starta om MeOS");
+    throw std::runtime_error("Internt fel i anslutningen. Starta om MeOS");
   wstring newId = makeValidFileName(currentNameId, true);
   currentNameId = newId;
 
@@ -407,14 +407,14 @@ bool oEvent::uploadSynchronize()
     string err;
     sqlConnection->getErrorMessage(err);
     string error = string("Kunde inte öppna databasen (X).#") + err;
-    throw std::exception(error.c_str());
+    throw std::runtime_error(error.c_str());
   }
 
   if ( !sqlConnection->synchronizeUpdate(this) ) {
     string err;
     sqlConnection->getErrorMessage(err);
     string error = string("Kunde inte ladda upp tävlingen (X).#") + err;
-    throw std::exception(error.c_str());
+    throw std::runtime_error(error.c_str());
   }
 
   OpFailStatus stat = (OpFailStatus)sqlConnection->uploadRunnerDB(this);
@@ -456,7 +456,7 @@ bool oEvent::uploadSynchronize()
 //Load a (new) competition from the server.
 bool oEvent::readSynchronize(const CompetitionInfo &ci) {
   if (ci.Id<=0)
-    throw std::exception("help:12290");
+    throw std::runtime_error("help:12290");
 
   if (isThreadReconnecting())
     return false;
@@ -924,7 +924,7 @@ void oEvent::dropDatabase()
 
     dropped = sqlConnection->dropDatabase(this)!=0;
   }
-  else throw std::exception("Not connected");
+  else throw std::runtime_error("Not connected");
 
   if (!dropped) {
     string err;

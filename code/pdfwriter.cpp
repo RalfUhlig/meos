@@ -86,7 +86,7 @@ HPDF_Font pdfwriter::getPDFFont(HFONT font, float hFontScale, wstring &tmp, floa
   if (getFontData(font, data, stdSize)) {
     tmp = getTempFile();
     string ntmp(tmp.begin(), tmp.end()); //XXX WCS
-    ofstream out(tmp.c_str(), ios::binary|ios::out|ios::trunc);
+    ofstream out(meosPath(tmp), ios::binary|ios::out|ios::trunc);
     out.write(&data[0], data.size());
     out.close();
     const char *detailName = HPDF_LoadTTFontFromFile(pdf, ntmp.c_str(), HPDF_TRUE);

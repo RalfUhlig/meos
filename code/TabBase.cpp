@@ -179,7 +179,7 @@ TabBase *FixedTabs::get(const TabType tab) {
     break;
 
     default:
-      throw new std::exception("Bad tab type");
+      throw new std::runtime_error("Bad tab type");
   }
 
   return 0;

@@ -27,8 +27,8 @@ class oEvent;
 class BaseInfo;
 
 #include <vector>
-enum GDICOLOR;
-enum PropertyType;
+enum GDICOLOR : int;
+enum PropertyType : int;
 #include "guihandler.h"
 
 class PrefsEditor : public GuiHandler {

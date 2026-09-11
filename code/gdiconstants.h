@@ -25,7 +25,7 @@
 
 #include "gdifonts.h"
 
-enum KeyCommandCode {
+enum KeyCommandCode : int {
   KC_NONE,
   KC_COPY,
   KC_PASTE,

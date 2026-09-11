@@ -161,7 +161,7 @@ void TabControl::save(gdioutput &gdi) {
   pControl pc = oe->getControl(controlId, false, true);
 
   if (!pc)
-    throw std::exception("Internal error");
+    throw std::runtime_error("Internal error");
 
   if (!pc->isAddedToEvent()) {
     if (gdi.getText("TimeAdjust") == pc->getTimeAdjustS()
@@ -175,7 +175,7 @@ void TabControl::save(gdioutput &gdi) {
       pc = oe->addControl(*pc);
 
     if (!pc)
-      throw std::exception("Internal error");
+      throw std::runtime_error("Internal error");
   }
 
   bool defaultName = false;
@@ -592,7 +592,7 @@ int TabControl::controlCB(gdioutput &gdi, GuiEventType type, BaseInfo* data) {
 
       pControl pc=oe->getControl(bi.data, false, true);
       if (!pc)
-        throw std::exception("Internal error");
+        throw std::runtime_error("Internal error");
 
       selectControl(gdi, pc);
     }

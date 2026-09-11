@@ -23,7 +23,7 @@
 
 #pragma once
 
-enum gdiFonts {
+enum gdiFonts : int {
   normalText=0,
   boldText=1,
   boldLarge=2,
@@ -66,7 +66,7 @@ constexpr int imageNoUpdatePos = 1 << 21;
 constexpr int time24HourClock = 1 << 22;
 constexpr int timeHHMM = 1 << 23;
 
-enum GDICOLOR {
+enum GDICOLOR : int {
   colorBlack = RGB(0, 0, 0),
   colorRed = RGB(128, 0, 0),
   colorGreen = RGB(0, 128, 0),

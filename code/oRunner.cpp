@@ -126,7 +126,7 @@ const wstring &oAbstractRunner::encodeStatus(RunnerStatus st, bool allowError) {
      if (allowError)
        res = L"ERROR";
      else
-      throw std::exception("Unknown status");
+      throw std::runtime_error("Unknown status");
    }
 
    return res;
@@ -2948,7 +2948,7 @@ void oAbstractRunner::setName(const wstring &n, bool manualUpdate)
 {
   wstring tn = trim(n);
   if (tn.empty())
-    throw std::exception("Tomt namn är inte tillåtet.");
+    throw std::runtime_error("Tomt namn är inte tillåtet.");
   if (tn != sName){
     sName.swap(tn);
     if (manualUpdate)
@@ -2979,7 +2979,7 @@ void oRunner::setName(const wstring &in, bool manualUpdate)
   n.resize(kx);
 
   if (n.empty())
-    throw std::exception("Tomt namn är inte tillåtet.");
+    throw std::runtime_error("Tomt namn är inte tillåtet.");
 
   if (n.length() <= 4 || n == lang.tl("N.N."))
     manualUpdate = false; // Never consider default names manual
@@ -4217,7 +4217,7 @@ pair<int, bool> oRunner::inputData(int id, const wstring &input,
       break;
     case TID_RUNNER:
       if (trim(input).empty())
-        throw std::exception("Tomt namn inte tillåtet.");
+        throw std::runtime_error("Tomt namn inte tillåtet.");
 
       if (sName != input && tRealName != input) {
         updateFromDB(input, getClubId(), getClassId(false), getCardNo(), getBirthYear(), false);
@@ -4234,7 +4234,7 @@ pair<int, bool> oRunner::inputData(int id, const wstring &input,
       evaluateCard(true, mp, 0, ChangeType::Update);
       s=getStartTime();
       if (s!=t)
-        throw std::exception("Starttiden är definerad genom klassen eller löparens startstämpling.");
+        throw std::runtime_error("Starttiden är definerad genom klassen eller löparens startstämpling.");
       synchronize(true);
       output = getStartTimeS();
       break;
@@ -4246,7 +4246,7 @@ pair<int, bool> oRunner::inputData(int id, const wstring &input,
       evaluateCard(true, mp, 0, ChangeType::Update);
       s=getFinishTime();
       if (s!=t)
-        throw std::exception("För att ändra måltiden måste löparens målstämplingstid ändras.");
+        throw std::runtime_error("För att ändra måltiden måste löparens målstämplingstid ändras.");
       synchronize(true);
       output = getStartTimeS();
       break;
@@ -4297,7 +4297,7 @@ pair<int, bool> oRunner::inputData(int id, const wstring &input,
       int s = getStatus();
       evaluateCard(true, mp, 0, ChangeType::Update);
       if (s!=getStatus())
-        throw std::exception("Status matchar inte data i löparbrickan.");
+        throw std::runtime_error("Status matchar inte data i löparbrickan.");
       synchronize(true);
       output = getStatusS(false, true);
     }

@@ -1889,7 +1889,7 @@ wstring getTempPath() {
     if (CreateDirectory(tempFile, NULL))
       tempPath = tempFile;
     else
-      throw std::exception("Failed to create temporary file.");
+      throw std::runtime_error("Failed to create temporary file.");
   }
   return tempPath;
 }
@@ -1907,7 +1907,7 @@ wstring getTempFile() {
     return tempFile;
   }
   else
-    throw std::exception("Failed to create temporary file.");
+    throw std::runtime_error("Failed to create temporary file.");
 }
 
 void removeTempFile(const wstring &file) {

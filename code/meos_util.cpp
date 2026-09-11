@@ -21,6 +21,7 @@
 ************************************************************************/
 
 #include "stdafx.h"
+#include <climits>
 #include <vector>
 #include "meos_util.h"
 #include "localizer.h"
@@ -48,7 +49,7 @@ StringCache &StringCache::getInstance() {
   if (mainThreadId == -1)
     mainThreadId = id;
   else if (mainThreadId != id)
-    throw std::exception("Thread access error");
+    throw std::runtime_error("Thread access error");
   return globalStringCache;
 }
 
@@ -935,11 +936,13 @@ const wstring &itow(int i) {
   return res;
 }
 
+#if ULONG_MAX == 0xFFFFFFFFUL // On LP64 platforms unsigned long is uint64_t, which has its own overload.
 wstring itow(unsigned long i) {
   wchar_t bf[32];
   _ultow_s(i, bf, 10);
   return bf;
 }
+#endif
 
 
 wstring itow(unsigned int i) {
@@ -976,12 +979,14 @@ string itos(unsigned int i)
   return bf;
 }
 
+#if ULONG_MAX == 0xFFFFFFFFUL // On LP64 platforms unsigned long is uint64_t, which has its own overload.
 string itos(unsigned long i)
 {
   char bf[32];
   _ultoa_s(i, bf, 10);
   return bf;
 }
+#endif
 
 string itos(int64_t i)
 {
@@ -1839,7 +1844,7 @@ bool isNumber(const wstring &s) {
   return len > 0;
 }
 
-int convertDynamicBase(const wstring &s, long long &out) {
+int convertDynamicBase(const wstring &s, int64_t &out) {
   out = 0;
   if (s.empty())
     return 0;

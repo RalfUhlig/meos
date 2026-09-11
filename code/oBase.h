@@ -137,7 +137,7 @@ public:
 
   //Called (by a table) to fill a list box with contents in a table
   virtual void fillInput(int id, vector< pair<wstring, size_t> > &elements, size_t &selected)
-    {throw std::exception("Not implemented");}
+    {throw std::runtime_error("Not implemented");}
 
   oEvent *getEvent() const {return oe;}
   int getId() const {return Id;}

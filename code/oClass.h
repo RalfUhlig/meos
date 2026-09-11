@@ -35,7 +35,7 @@ class oRunner;
 
 const int MaxClassId = 1000000;
 
-enum PersonSex;
+enum PersonSex : int;
 
 enum StartTypes {
   STTime=0,

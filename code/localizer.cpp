@@ -102,7 +102,7 @@ Localizer::LocalizerInternal::~LocalizerInternal(void)
 void Localizer::LocalizerInternal::set(Localizer &lio) {
   Localizer::LocalizerInternal &li = *lio.linternal;
   if (li.user || user)
-    throw std::exception("Runtime error");
+    throw std::runtime_error("Runtime error");
 
   if (owning) {
     delete impl;
@@ -295,7 +295,7 @@ void LocalizerImpl::saveUnknown(const wstring &file)
   const wstring newline = L"\n";
 
   if (!unknown.empty()) {
-    ofstream fout(file.c_str(), ios::trunc|ios::out);
+    ofstream fout(meosPath(file), ios::trunc|ios::out);
     for (map<wstring, wstring>::iterator it = unknown.begin(); it!=unknown.end(); ++it) {
       wstring value = it->second;
       wstring key = it->first;
@@ -343,7 +343,7 @@ const oWordList &LocalizerImpl::getGivenNames() const {
 void Localizer::LocalizerInternal::loadLangResource(const wstring &name) {
   map<wstring,wstring>::iterator it = langResource.find(name);
   if (it == langResource.end())
-    throw std::exception("Unknown language");
+    throw std::runtime_error("Unknown language");
 
   wstring &res = it->second;
 
@@ -384,7 +384,7 @@ void LocalizerImpl::translateAll(const LocalizerImpl &all) {
 
 void LocalizerImpl::saveTable(const wstring &file) {
   const wstring newline = L"\n";
-  ofstream fout(language+L"_"+file, ios::trunc|ios::out);
+  ofstream fout(meosPath(language+L"_"+file), ios::trunc|ios::out);
   for (map<wstring, wstring>::iterator it = table.begin(); it!=table.end(); ++it) {
     wstring value = it->second;
     int nl = value.find(newline);
@@ -397,7 +397,7 @@ void LocalizerImpl::saveTable(const wstring &file) {
 }
 
 void LocalizerImpl::saveTranslation(const wstring &file) {
-  ofstream fout(language + L"_" + file, ios::trunc | ios::out);
+  ofstream fout(meosPath(language + L"_" + file), ios::trunc | ios::out);
   for (map<wstring, wstring>::iterator it = table.begin(); it != table.end(); ++it) {
     fout << toUTF8(it->second) << endl;
   }
@@ -411,7 +411,7 @@ void LocalizerImpl::loadTable(int id, const wstring &language)
   HGLOBAL hGlobal = LoadResource(0, hResInfo);
 
   if (hGlobal==0)
-    throw std::exception("Resource not found");
+    throw std::runtime_error("Resource not found");
 
   int size = SizeofResource(0, hResInfo);
 
@@ -443,7 +443,7 @@ void LocalizerImpl::loadTable(int id, const wstring &language)
 void LocalizerImpl::loadTable(const wstring &file, const wstring &language)
 {
   clear();
-  ifstream fin(file.c_str(), ios::in);
+  ifstream fin(meosPath(file), ios::in);
 
   if (!fin.good())
     return;
@@ -489,7 +489,7 @@ void LocalizerImpl::loadTable(const vector<string> &raw, const wstring &language
     size_t pos = s.find_first_of('=');
 
     if (pos==string::npos)
-      throw std::exception("Bad file format.");
+      throw std::runtime_error("Bad file format.");
     size_t spos = pos;
     size_t epos = pos+1;
     const unsigned char *udata = (const unsigned char*)s.data();
@@ -517,7 +517,7 @@ void LocalizerImpl::loadTable(const vector<string> &raw, const wstring &language
     string value = s.substr(epos);
 
     if (value.empty() || key.empty())
-      throw std::exception("Bad file format.");
+      throw std::runtime_error("Bad file format.");
 
     if (value.size() > 1 && value[0] == 'Â') {
       value = value.substr(2);

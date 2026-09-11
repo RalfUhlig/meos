@@ -33,7 +33,7 @@ class oClass;
 typedef oEvent *pEvent;
 typedef oClass *pClass;
 
-enum EPostType {
+enum EPostType : int {
   lAlignNext,
   lNone,
   lString,
@@ -268,7 +268,7 @@ enum EPostType {
   lLastItem
 };
 
-enum EStdListType {
+enum EStdListType : int {
   EStdNone=-1,
   EStdStartList=1,
   EStdResultList,
@@ -348,7 +348,7 @@ enum ESubFilterList
   _ESubFilterMax
 };
 
-enum gdiFonts;
+enum gdiFonts : int;
 
 struct oPrintPost {
   oPrintPost();
@@ -401,7 +401,7 @@ struct oPrintPost {
 
 class gdioutput;
 class BaseInfo;
-enum gdiFonts;
+enum gdiFonts : int;
 class xmlparser;
 class xmlobject;
 class MetaListContainer;

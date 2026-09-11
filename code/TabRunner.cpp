@@ -566,7 +566,7 @@ pRunner TabRunner::save(gdioutput &gdi, int runnerId, bool willExit) {
   wstring name=gdi.getText("Name");
 
   if (name.empty())
-    throw std::exception("Alla deltagare måste ha ett namn.");
+    throw std::runtime_error("Alla deltagare måste ha ett namn.");
 
   int cardNo = gdi.getTextNo("CardNo");
 
@@ -1710,12 +1710,12 @@ int TabRunner::vacancyCB(gdioutput &gdi, GuiEventType type, BaseInfo* data) {
 
     r->synchronize();
     if (!r->isVacant())
-      throw std::exception("Starttiden är upptagen.");
+      throw std::runtime_error("Starttiden är upptagen.");
 
     wstring name = gdi.getText("Name");
 
     if (name.empty())
-      throw std::exception("Alla deltagare måste ha ett namn.");
+      throw std::runtime_error("Alla deltagare måste ha ett namn.");
 
     int cardNo = gdi.getTextNo("CardNo");
 

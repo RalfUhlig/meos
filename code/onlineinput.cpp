@@ -94,7 +94,7 @@ int OnlineInput::processListBox(gdioutput& gdi, ListBoxInfo& lbi) {
 
 int OnlineInput::processButton(gdioutput &gdi, ButtonInfo &bi) {
   if (settingsOE == nullptr)
-    throw std::exception("Internal error");
+    throw std::runtime_error("Internal error");
 
   oEvent &oe = *settingsOE;
   if (bi.id == "SaveMapping") {

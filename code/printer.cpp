@@ -282,7 +282,7 @@ void gdioutput::print(PrinterObject &po, pEvent oe, bool printMeOSHeader, bool n
       if (ans == "print")
         return;
     }
-    throw std::exception("Printing error");
+    throw std::runtime_error("Printing error");
   }
   PageInfo pageInfo;
   pageInfo.printHeader = printMeOSHeader;
@@ -700,7 +700,7 @@ void PageInfo::renderPages(const list<TextInfo> &tl,
       const RectangleInfo *ri = dynamic_cast<const RectangleInfo *>(indexedTL[k].obj);
       assert(ri && !pages.empty());
       if (!ri || pages.empty())
-        throw std::exception("Unexpected type");
+        throw std::runtime_error("Unexpected type");
 
       pages.back().rectangles.push_back(*ri);
       RectangleInfo &r = pages.back().rectangles.back();

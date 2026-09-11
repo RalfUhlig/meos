@@ -134,7 +134,7 @@ void Download::initInternet() {
 void Download::downloadFile(const wstring &url, const wstring &file, const vector< pair<wstring, wstring> > &headers)
 {
   if (hURL || !hInternet)
-    throw std::exception("Not inititialized");
+    throw std::runtime_error("Not inititialized");
   
   success = false;
 
@@ -417,10 +417,10 @@ bool Download::httpSendReqEx(HINTERNET hConnect, bool https, const wstring &dest
       else {
         InternetCloseHandle(hRequest);
         if (error == ERROR_INTERNET_TIMEOUT) {
-          throw std::exception("Fick inget svar i tid (ERROR_INTERNET_TIMEOUT)");
+          throw std::runtime_error("Fick inget svar i tid (ERROR_INTERNET_TIMEOUT)");
         }
         else if (error == ERROR_INTERNET_CONNECTION_RESET) {
-          throw std::exception("Inget svar (ERROR_INTERNET_CONNECTION_RESET)");
+          throw std::runtime_error("Inget svar (ERROR_INTERNET_CONNECTION_RESET)");
         }
         return false;
       }

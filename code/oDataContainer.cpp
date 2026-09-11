@@ -83,7 +83,7 @@ oDataInfo &oDataContainer::addVariableInt(const char *name,
     return addVariable(odi);
   }
   else
-    throw std::exception("oDataContainer: Out of bounds.");
+    throw std::runtime_error("oDataContainer: Out of bounds.");
 }
 
 oDataInfo &oDataContainer::addVariableDecimal(const char *name, const char *descr, int fixedDeci) {
@@ -109,7 +109,7 @@ oDataInfo &oDataContainer::addVariableDecimal(const char *name, const char *desc
     return addVariable(odi);
   }
   else
-    throw std::exception("oDataContainer: Out of bounds.");
+    throw std::runtime_error("oDataContainer: Out of bounds.");
 }
 
 oDataInfo &oDataContainer::addVariableString(const char *name, const char *descr, const shared_ptr<oDataDefiner> &dataDef) {
@@ -134,7 +134,7 @@ oDataInfo &oDataContainer::addVariableString(const char *name, int maxChar,
       return addVariable(odi);
     }
     else
-      throw std::exception("oDataContainer: Out of bounds.");
+      throw std::runtime_error("oDataContainer: Out of bounds.");
   }
   else {
     odi.Index = stringIndexPointer++;
@@ -156,7 +156,7 @@ oDataInfo &oDataContainer::addVariableEnum(const char *name, int maxChar, const 
 
 oDataInfo &oDataContainer::addVariable(oDataInfo &odi) {
   if (findVariable(odi.Name))
-    throw std::exception("oDataContainer: Variable already exist.");
+    throw std::runtime_error("oDataContainer: Variable already exist.");
 
   //index[odi.Name]=odi;
   index.insert(hash(odi.Name), ordered.size());
@@ -204,7 +204,7 @@ const oDataInfo *oDataContainer::findVariable(const char *name) const
 
 void oDataContainer::initData(oBase *ob, int datasize) {
   if (datasize<dataPointer)
-    throw std::exception("oDataContainer: Buffer too small.");
+    throw std::runtime_error("oDataContainer: Buffer too small.");
 
   void *data, *oldData;
   vector< vector<wstring> > *strptr;
@@ -225,7 +225,7 @@ bool oDataContainer::isInt(const char *name) const {
   const oDataInfo *odi = findVariable(name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   return odi->Type == oDTInt;
 }
@@ -234,7 +234,7 @@ bool oDataContainer::isString(const char *name) const {
   const oDataInfo *odi = findVariable(name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   return odi->Type == oDTString || odi->Type == oDTStringDynamic;
 }
@@ -244,13 +244,13 @@ bool oDataContainer::setInt(oBase* ob, void *data, const char *Name, int V)
   oDataInfo *odi=findVariable(Name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type!=oDTInt)
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
   if (odi->SubType == oIS64)
-    throw std::exception("oDataContainer: Variable to large.");
+    throw std::runtime_error("oDataContainer: Variable to large.");
 
   LPBYTE vd=LPBYTE(data)+odi->Index;
   int oldValue = *((int*)vd);
@@ -269,13 +269,13 @@ bool oDataContainer::setInt64(void *data, const char *Name, __int64 V)
   oDataInfo *odi=findVariable(Name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type!=oDTInt)
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
   if (odi->SubType != oIS64)
-    throw std::exception("oDataContainer: Variable to large.");
+    throw std::runtime_error("oDataContainer: Variable to large.");
 
   LPBYTE vd=LPBYTE(data)+odi->Index;
   if (*((__int64 *)vd)!=V){
@@ -289,10 +289,10 @@ bool oDataContainer::setDouble(oBase* ob, void* data, const char* name, double v
   const oDataInfo* odi = findVariable(name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type != oDTDouble)
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
   LPBYTE vd = LPBYTE(data) + odi->Index;
   if (*((double*)vd) != value) {
@@ -307,13 +307,13 @@ int oDataContainer::getInt(const void *data, const char *Name) const
   const oDataInfo *odi=findVariable(Name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type!=oDTInt)
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
   if (odi->SubType == oIS64)
-    throw std::exception("oDataContainer: Variable to large.");
+    throw std::runtime_error("oDataContainer: Variable to large.");
 
   LPBYTE vd=LPBYTE(data)+odi->Index;
   return *((int *)vd);
@@ -324,10 +324,10 @@ __int64 oDataContainer::getInt64(const void *data, const char *Name) const
   const oDataInfo *odi=findVariable(Name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type!=oDTInt)
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
   LPBYTE vd=LPBYTE(data)+odi->Index;
 
@@ -343,10 +343,10 @@ double oDataContainer::getDouble(const void* data, const char* name) const {
   const oDataInfo* odi = findVariable(name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type != oDTDouble)
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
   LPBYTE vd = LPBYTE(data) + odi->Index;
   return *((double*)vd);
@@ -356,7 +356,7 @@ bool oDataContainer::setString(oBase *ob, const char *name, const wstring &v) {
   oDataInfo *odi=findVariable(name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   void *data, *oldData;
   vector< vector<wstring> > *strptr;
@@ -384,7 +384,7 @@ bool oDataContainer::setString(oBase *ob, const char *name, const wstring &v) {
     return true;
   }
   else
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
 }
 
@@ -399,7 +399,7 @@ const wstring &oDataContainer::formatString(const oBase *ob, const char *Name) c
   else if (odi->Type == oDTInt) {
     return itow(getInt(ob, Name));
   }
-  throw std::exception("oDataContainer: Formatting failed.");
+  throw std::runtime_error("oDataContainer: Formatting failed.");
 }
 
 const wstring &oDataContainer::getString(const oBase *ob, const char *Name) const {
@@ -410,7 +410,7 @@ const wstring &oDataContainer::getString(const oBase *ob, const char *Name) cons
   ob->getDataBuffers(data, oldData, strptr);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type == oDTString) {
     LPBYTE vd=LPBYTE(data)+odi->Index;
@@ -423,7 +423,7 @@ const wstring &oDataContainer::getString(const oBase *ob, const char *Name) cons
     return str;
   }
   else
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 }
 
 
@@ -432,10 +432,10 @@ bool oDataContainer::setDate(void *data, const char *Name, const wstring &V)
   oDataInfo *odi=findVariable(Name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type!=oDTInt)
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
   int C = convertDateYMD(V, true);
   if (C <= 0) {
@@ -459,10 +459,10 @@ const wstring& oDataContainer::getDate(const void* data, const char* name) const
   const oDataInfo* odi = findVariable(name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type != oDTInt)
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
   LPBYTE vd = LPBYTE(data) + odi->Index;
   int C = *((int*)vd);
@@ -493,10 +493,10 @@ int oDataContainer::getYear(const void* data, const char *name) const {
   const oDataInfo* odi = findVariable(name);
 
   if (!odi)
-    throw std::exception("oDataContainer: Variable not found.");
+    throw std::runtime_error("oDataContainer: Variable not found.");
 
   if (odi->Type != oDTInt)
-    throw std::exception("oDataContainer: Variable of wrong type.");
+    throw std::runtime_error("oDataContainer: Variable of wrong type.");
 
   LPBYTE vd = LPBYTE(data) + odi->Index;
   int C = *((int*)vd);
@@ -651,7 +651,7 @@ vector<InputInfo *> oDataContainer::buildDataFields(gdioutput &gdi, const vector
 
     //if (it==index.end())
     if (odi == 0)
-      throw std::exception( ("Bad key: " + fields[k]).c_str());
+      throw std::runtime_error( ("Bad key: " + fields[k]).c_str());
 
     const oDataInfo &di=*odi;
     string Id=di.Name+string("_odc");
@@ -1297,7 +1297,7 @@ void oDataContainer::getVariableString(const oBase *ob,
 
 oDataInterface oDataContainer::getInterface(void *data, int datasize, oBase *ob)
 {
-  if (datasize<dataPointer) throw std::exception("Out Of Bounds.");
+  if (datasize<dataPointer) throw std::runtime_error("Out Of Bounds.");
 
   return oDataInterface(this, data, ob);
 }
@@ -1305,7 +1305,7 @@ oDataInterface oDataContainer::getInterface(void *data, int datasize, oBase *ob)
 oDataConstInterface oDataContainer::getConstInterface(const void *data, int datasize,
                                                       const oBase *ob) const
 {
-  if (datasize<dataPointer) throw std::exception("Out Of Bounds.");
+  if (datasize<dataPointer) throw std::runtime_error("Out Of Bounds.");
 
   return oDataConstInterface(this, data, ob);
 }

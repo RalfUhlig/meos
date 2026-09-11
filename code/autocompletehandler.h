@@ -26,6 +26,6 @@ class gdioutput;
 
 class AutoCompleteHandler {
 public:
-  virtual ~AutoCompleteHandler() = 0 {}
+  virtual ~AutoCompleteHandler() = default;
   virtual void handleAutoComplete(gdioutput &gdi, AutoCompleteInfo &info) = 0;
 };

@@ -65,7 +65,7 @@ public:
   virtual const char *getTypeStr() const = 0;
   
   TabBase(oEvent *poe) : oe(poe), tabId(0) {}
-  virtual ~TabBase()=0  {}
+  virtual ~TabBase() = default;
   friend class TabObject;
   friend class FixedTabs;
 };

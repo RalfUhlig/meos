@@ -2578,7 +2578,7 @@ void SICard::deserializePunches(const string &arg) {
     vector<string> mark;
     split(out[k], "-", mark);
     if (mark.size() != 2 || mark[0].empty())
-      throw std::exception("Invalid string");
+      throw std::runtime_error("Invalid string");
     DWORD *tp = 0;
     if (mark[0][0] == 'F') {
       FinishPunch.Code = atoi(mark[0].c_str() + 1);
@@ -2635,14 +2635,14 @@ void SportIdent::addSpecialMapping(int code, oPunch::SpecialPunch p) {
   if (code > 0 && code < punchMap.size())
     punchMap[code] = p;
   else
-    throw std::exception("Not supported");
+    throw std::runtime_error("Not supported");
 }
 
 void SportIdent::removeSpecialMapping(int code) {
   if (code > 0 && code < punchMap.size())
     punchMap[code] = 0;
   else
-    throw std::exception("Not supported");
+    throw std::runtime_error("Not supported");
 }
 
 void SportIdent::addTestCard(int cardNo, const vector<int> &punches) {

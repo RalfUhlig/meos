@@ -271,7 +271,7 @@ void oPunch::setPunchUnit(int unit) {
 }
 
 oDataContainer &oPunch::getDataBuffers(pvoid &data, pvoid &olddata, pvectorstr &strData) const {
-  throw std::exception("Unsupported");
+  throw std::runtime_error("Unsupported");
 }
 
 wstring oPunch::getRunningTime(int startTime) const

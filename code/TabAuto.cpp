@@ -168,7 +168,7 @@ void tabForceSync(gdioutput &gdi, pEvent oe) {
 
 int AutomaticCB(gdioutput *gdi, GuiEventType type, BaseInfo* data) {
   if (!tabAuto)
-    throw std::exception("tabAuto undefined.");
+    throw std::runtime_error("tabAuto undefined.");
 
   switch(type){
     case GUI_BUTTON: {

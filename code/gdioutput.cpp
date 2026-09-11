@@ -1591,7 +1591,7 @@ void gdioutput::check(const string &id, bool state, bool keepOriginalState){
 
   #ifdef _DEBUG
     string err = string("Internal Error, identifier not found: X#") + id;
-    throw std::exception(err.c_str());
+    throw std::runtime_error(err.c_str());
   #endif
 }
 
@@ -1741,7 +1741,7 @@ ListBoxInfo &gdioutput::addListBox(const string &id, int width, int height, GUIC
 LRESULT CALLBACK GetMsgProc(HWND hWnd, UINT iMsg, WPARAM wParam, LPARAM lParam) {
   ListBoxInfo *lbi = (ListBoxInfo *)(GetWindowLongPtr(hWnd, GWLP_USERDATA));
   if (!lbi) {
-    throw std::exception("Internal GDI error");
+    throw std::runtime_error("Internal GDI error");
   }
 
   LPARAM res = CallWindowProc(lbi->originalProc, hWnd, iMsg, wParam, lParam);
@@ -1766,7 +1766,7 @@ void gdioutput::synchronizeListScroll(const string &id1, const string &id2)
       b = &*it;
   }
   if (!a || !b)
-    throw std::exception("Not found");
+    throw std::runtime_error("Not found");
 
   a->lbiSync = b;
   b->lbiSync = a;
@@ -1862,7 +1862,7 @@ void gdioutput::getSelection(const string &id, set<int> &selection) {
 
   #ifdef _DEBUG
     string err = string("Internal Error, identifier not found: X#") + id;
-    throw std::exception(err.c_str());
+    throw std::runtime_error(err.c_str());
   #endif
 }
 
@@ -2180,7 +2180,7 @@ int gdioutput::getNumItems(const char *id) {
 
 #ifdef _DEBUG
   string err = string("Internal Error, identifier not found: X#") + id;
-  throw std::exception(err.c_str());
+  throw std::runtime_error(err.c_str());
 #endif
 
   return 0;
@@ -3580,7 +3580,7 @@ BaseInfo& gdioutput::getBaseInfo(const char* id, int requireExtraMatch) const {
   }
 
   string err = string("Internal Error, identifier not found: X#") + id;
-  throw std::exception(err.c_str());
+  throw std::runtime_error(err.c_str());
 }
 
 const wstring &gdioutput::getText(const char *id, bool acceptMissing, int requireExtraMatch) const {
@@ -3626,7 +3626,7 @@ const wstring &gdioutput::getText(const char *id, bool acceptMissing, int requir
 #ifdef _DEBUG
   if (!acceptMissing) {
     string err = string("Internal Error, identifier not found: X#") + id;
-    throw std::exception(err.c_str());
+    throw std::runtime_error(err.c_str());
   }
 #endif
   return _EmptyWString;
@@ -4265,7 +4265,7 @@ void gdioutput::setInputStatus(const char *id, bool status, bool acceptMissing, 
 #ifdef _DEBUG
   if (!hit) {
     string err = string("Internal Error, identifier not found: X#") + id;
-    throw std::exception(err.c_str());
+    throw std::runtime_error(err.c_str());
   }
 #endif
 }
@@ -6103,7 +6103,7 @@ DWORD gdioutput::makeEvent(const string &id, const string &origin,
 #ifndef MEOSDB
     ::flushEvent(id, origin, data, extraData);
 #else
-    throw std::exception("internal gdi/database error");
+    throw std::runtime_error("internal gdi/database error");
 #endif
   }
   else {
@@ -6195,7 +6195,7 @@ RectangleInfo &gdioutput::getRectangle(const char *id) {
     return *it;
   }
   string err = string("Internal Error, identifier not found: X#") + id;
-  throw std::exception(err.c_str());
+  throw std::runtime_error(err.c_str());
 }
   
 void gdioutput::setOffset(int x, int y, bool update)
@@ -6672,7 +6672,7 @@ void gdioutput::getTargetDimension(int &x, int &y) const
 
 Table &gdioutput::getTable() const {
   if (Tables.empty())
-    throw std::exception("No table defined");
+    throw std::runtime_error("No table defined");
 
   return *const_cast<Table *>(Tables.back().table.get());
 }
@@ -7925,7 +7925,7 @@ void gdioutput::dbInput(const string &id, const string &text) {
 
 void gdioutput::dbLeftClick(int x, int y) {
   if (!mouseHandler)
-    throw std::exception("No mouse handler");
+    throw std::runtime_error("No mouse handler");
 
   mouseHandler->mouseButton(*this, MouseHandler::MouseEvent::LButtonDown, int(x * scale), int(y * scale));
 }

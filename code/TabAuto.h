@@ -26,6 +26,7 @@
 #include <string>
 #include "oListInfo.h"
 #include "importformats.h"
+#include "meosexception.h"
 
 using namespace std;
 
@@ -189,7 +190,7 @@ public:
 
   AutoMachine(const string &s, Machines type) : myid(uniqueId++), type(type), name(s), interval(0), timeout(0),
             synchronize(false), synchronizePunches(false), editMode(false) {}
-  virtual ~AutoMachine() = 0 {}
+  virtual ~AutoMachine() = default;
 };
 
 class SaveMachine :

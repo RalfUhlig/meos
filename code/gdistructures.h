@@ -27,7 +27,7 @@
 #include "gdifonts.h"
 
 class Table;
-enum KeyCommandCode;
+enum KeyCommandCode : int;
 
 class MouseHandler {
 public:
@@ -37,7 +37,7 @@ public:
   };
 
   virtual void mouseButton(gdioutput &gdi, MouseEvent event, int x, int y) const = 0;
-  virtual ~MouseHandler() = 0 {};
+  virtual ~MouseHandler() = default;
 };
 
 
@@ -125,7 +125,7 @@ public:
     setHandler(h);
   }
 
-  HWND getControlWindow() const final { throw std::exception("Unsupported"); }
+  HWND getControlWindow() const final { throw std::runtime_error("Unsupported"); }
 };
 
 class RestoreInfo final : public BaseInfo {
@@ -157,7 +157,7 @@ public:
     return nLBI < r.nLBI || nBI < r.nBI || nII < r.nII || nTL < r.nTL || nRect < r.nRect || nData < r.nData;
   }
 
-  HWND getControlWindow() const final {throw std::exception("Unsupported");}
+  HWND getControlWindow() const final {throw std::runtime_error("Unsupported");}
 };
 
 class RectangleInfo final : public BaseInfo {
@@ -181,7 +181,7 @@ public:
 
   RectangleInfo &changeDimension(gdioutput &gdi, int dx, int dy); 
 
-  HWND getControlWindow() const final {throw std::exception("Unsupported");}
+  HWND getControlWindow() const final {throw std::runtime_error("Unsupported");}
 };
 
 class TableInfo final: public BaseInfo {
@@ -191,7 +191,7 @@ public:
   int yp;
   shared_ptr<Table> table;
 
-  HWND getControlWindow() const final {throw std::exception("Unsupported");}
+  HWND getControlWindow() const final {throw std::runtime_error("Unsupported");}
 };
 
 class TextInfo final: public BaseInfo
@@ -245,7 +245,7 @@ public:
   bool hasTimer = false;
   bool hasCapture = false;
 
-  HWND getControlWindow() const final {throw std::exception("Unsupported");}
+  HWND getControlWindow() const final {throw std::runtime_error("Unsupported");}
 
   friend class gdioutput;
 };
@@ -297,7 +297,7 @@ public:
   HWND getControlWindow() const final { return hWnd; }
 };
 
-enum gdiFonts;
+enum gdiFonts : int;
 class InputInfo  final: public BaseInfo {
 public:
   InputInfo();
@@ -428,7 +428,7 @@ public:
   EventInfo();
   GUICALLBACK callBack;
 
-  HWND getControlWindow() const final {throw std::exception("Unsupported");}
+  HWND getControlWindow() const final {throw std::runtime_error("Unsupported");}
 };
 
 class TimerInfo  final : public BaseInfo {
@@ -460,7 +460,7 @@ public:
   friend class gdioutput;
   friend void CALLBACK gdiTimerProc(HWND hWnd, UINT a, UINT_PTR ptr, DWORD b);
 
-  HWND getControlWindow() const final { throw std::exception("Unsupported"); }
+  HWND getControlWindow() const final { throw std::runtime_error("Unsupported"); }
 };
 
 enum class BoxStyle {
@@ -489,7 +489,7 @@ public:
   bool hasCapture;
   bool hasTCapture;
 
-  HWND getControlWindow() const final {throw std::exception("Unsupported");}
+  HWND getControlWindow() const final {throw std::runtime_error("Unsupported");}
 };
 
 typedef list<TextInfo> TIList;

@@ -415,7 +415,7 @@ void oEvent::setupRelayInfo(PredefinedTypes type, bool &useNLeg, bool &useStart)
       break;
 
     default:
-      throw std::exception("Bad setup number");
+      throw std::runtime_error("Bad setup number");
   }
 }
 
@@ -663,7 +663,7 @@ void oEvent::setupRelay(oClass &cls, PredefinedTypes type, int nleg, const wstri
       break;
     }
     default:
-      throw std::exception("Bad setup number");
+      throw std::runtime_error("Bad setup number");
   }
   cls.apply();
   cls.synchronize(true);
@@ -988,7 +988,7 @@ void oTeam::fillInSortData(SortOrder so, int leg, bool linearLeg, map<int, int> 
 }
 
 template<SortOrder so>
-static bool oTeam::compareGeneral(const oTeam& a, const oTeam& b) {
+bool oTeam::compareGeneral(const oTeam& a, const oTeam& b) {
   if constexpr (so == ClassStartTimeClub)
     return compareResultNoSno(a, b);
   else if constexpr (so == ClubClassStartTime)

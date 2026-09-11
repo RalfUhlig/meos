@@ -31,6 +31,7 @@
 #include <unordered_map>
 #include <deque>
 #include <algorithm>
+#include "platform/meospath.h"
 
 using std::shared_ptr;
 using std::string;

@@ -1,4 +1,4 @@
-/************************************************************************
+Ôªø/************************************************************************
     MeOS - Orienteering Software
     Copyright (C) 2009-2026 Melin Software HB
 
@@ -16,7 +16,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     Melin Software HB - software@melin.nu - www.melin.nu
-    Eksoppsv‰gen 16, SE-75646 UPPSALA, Sweden
+    Eksoppsv√§gen 16, SE-75646 UPPSALA, Sweden
 
 ************************************************************************/
 #define _USE_MATH_DEFINES
@@ -169,7 +169,7 @@ pair<int, int>  MapData::render(oEvent& oe, gdioutput& gdi, int xp, int yp,
     margin = 0;
   }
   else if (!any) {
-    throw meosException("Kan inte lokalisera kontrollerna pÂ kartan.");
+    throw meosException("Kan inte lokalisera kontrollerna p√• kartan.");
   }
  
   int wm = xmax - xmin + 2 * margin;

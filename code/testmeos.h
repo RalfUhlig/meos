@@ -30,8 +30,8 @@ class BaseInfo;
 #include "TabBase.h"
 #include "subcommand.h"
 
-enum GDICOLOR;
-enum PropertyType;
+enum GDICOLOR : int;
+enum PropertyType : int;
 
 enum TestStatus {
   PASSED,
