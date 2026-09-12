@@ -195,7 +195,7 @@ bool MeosSQL::listCompetitions(oEvent *oe, bool keepConnection) {
 
   string serverInfo = con->server_info();
 
-  if (serverInfo < "5.0.3") {
+  if (serverInfo < "5.0.3" && atoi(serverInfo.c_str())<8) {
     errorMessage = "Minst MySQL X krävs. Du använder version Y.#5.0.3#" + serverInfo;
     return false;
   }
