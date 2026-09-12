@@ -2654,7 +2654,7 @@ void SportIdent::debugLog(const wchar_t *msg) {
 }
 
 void SportIdent::readRawData(const wstring &file) {
-  std::ifstream fin(file);
+  std::ifstream fin(meosPath(file));
 
   BYTE b[128 * 5];
   memset(b, 0, 128 * 5);

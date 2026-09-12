@@ -13,7 +13,12 @@
 
 #include "StdAfx.h"
 
+#include <process.h>
+#include <winsock2.h>
+
 #include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
 #include <unistd.h>
 
 namespace {
@@ -188,6 +193,223 @@ void testFiles() {
   std::filesystem::remove_all(base);
 }
 
+void testThreads() {
+  CRITICAL_SECTION section;
+  InitializeCriticalSection(&section);
+
+  // Windows critical sections are recursive.
+  EnterCriticalSection(&section);
+  EnterCriticalSection(&section);
+  LeaveCriticalSection(&section);
+
+  int counter = 0;
+  std::thread other([&] {
+    EnterCriticalSection(&section);
+    counter = 1;
+    LeaveCriticalSection(&section);
+  });
+  Sleep(50);
+  CHECK(counter == 0); // The section is still held here.
+  LeaveCriticalSection(&section);
+  other.join();
+  CHECK(counter == 1);
+  DeleteCriticalSection(&section);
+
+  const std::uint64_t start = GetTickCount64();
+  Sleep(120);
+  CHECK(GetTickCount64() - start >= 100);
+
+  static std::atomic<bool> ran{false};
+  const HANDLE thread = reinterpret_cast<HANDLE>(_beginthread([](void *) { ran = true; }, 0, nullptr));
+  DWORD exitCode = 0;
+  for (int wait = 0; wait < 100 && !ran; wait++)
+    Sleep(10);
+  CHECK(ran);
+  // The handle of a finished thread is no longer valid, as with _beginthread.
+  for (int wait = 0; wait < 100 && GetExitCodeThread(thread, &exitCode); wait++)
+    Sleep(10);
+  CHECK(!GetExitCodeThread(thread, &exitCode));
+}
+
+// A pseudo terminal stands in for the serial port of an SI master station.
+void testSerialPort() {
+  const int master = ::posix_openpt(O_RDWR | O_NOCTTY);
+  CHECK(master >= 0);
+  if (master < 0)
+    return;
+  CHECK(::grantpt(master) == 0 && ::unlockpt(master) == 0);
+  char name[64] = {0};
+  CHECK(::ptsname_r(master, name, sizeof(name)) == 0);
+
+  const HANDLE port = CreateFile(meos_compat::utf8ToWide(name).c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+                                 nullptr, OPEN_EXISTING, 0, nullptr);
+  CHECK(port != INVALID_HANDLE_VALUE);
+  if (port == INVALID_HANDLE_VALUE) {
+    ::close(master);
+    return;
+  }
+
+  DCB state;
+  std::memset(&state, 0, sizeof(state));
+  state.DCBlength = sizeof(state);
+  state.BaudRate = CBR_38400;
+  state.fBinary = TRUE;
+  state.fDtrControl = DTR_CONTROL_DISABLE;
+  state.fRtsControl = RTS_CONTROL_DISABLE;
+  state.Parity = NOPARITY;
+  state.StopBits = ONESTOPBIT;
+  state.ByteSize = 8;
+  CHECK(SetCommState(port, &state));
+  DCB reread;
+  CHECK(GetCommState(port, &reread));
+  CHECK(reread.BaudRate == CBR_38400 && reread.ByteSize == 8 && reread.DCBlength == sizeof(DCB));
+  state.BaudRate = 12345; // Not a standard rate.
+  CHECK(!SetCommState(port, &state));
+  state.BaudRate = CBR_4800;
+  CHECK(SetCommState(port, &state));
+
+  COMMTIMEOUTS timeouts = {};
+  CHECK(GetCommTimeouts(port, &timeouts));
+  timeouts.ReadIntervalTimeout = 50;
+  timeouts.ReadTotalTimeoutMultiplier = 10;
+  timeouts.ReadTotalTimeoutConstant = 300;
+  timeouts.WriteTotalTimeoutMultiplier = 10;
+  timeouts.WriteTotalTimeoutConstant = 300;
+  CHECK(SetCommTimeouts(port, &timeouts));
+  COMMTIMEOUTS restored = {};
+  CHECK(GetCommTimeouts(port, &restored) && restored.ReadTotalTimeoutConstant == 300);
+
+  // STX, command, ETX as the SI protocol frames it.
+  const BYTE request[] = {0x02, 0xF0, 0x01, 0x03};
+  DWORD written = 0;
+  CHECK(WriteFile(port, request, sizeof(request), &written, nullptr) && written == sizeof(request));
+  BYTE echo[8] = {0};
+  CHECK(::read(master, echo, sizeof(request)) == static_cast<ssize_t>(sizeof(request)));
+  CHECK(std::memcmp(echo, request, sizeof(request)) == 0);
+
+  const BYTE answer[] = {0x02, 0x02, 0x03};
+  CHECK(::write(master, answer, sizeof(answer)) == static_cast<ssize_t>(sizeof(answer)));
+  BYTE buffer[8] = {0};
+  DWORD got = 0;
+  CHECK(ReadFile(port, buffer, sizeof(answer), &got, nullptr) && got == sizeof(answer));
+  CHECK(std::memcmp(buffer, answer, sizeof(answer)) == 0);
+
+  // A timeout is not an error: the call succeeds with the bytes read so far.
+  const std::uint64_t start = GetTickCount64();
+  CHECK(ReadFile(port, buffer, 4, &got, nullptr) && got == 0);
+  const std::uint64_t waited = GetTickCount64() - start;
+  CHECK(waited >= 300 && waited < 3000); // 10 ms per byte plus 300 ms
+
+  DWORD event = 0;
+  CHECK(SetCommMask(port, EV_RXCHAR));
+  std::thread sender([master] {
+    Sleep(100);
+    const BYTE punch = 0xD3;
+    const ssize_t sent = ::write(master, &punch, 1);
+    (void)sent;
+  });
+  CHECK(WaitCommEvent(port, &event, nullptr) && event == EV_RXCHAR);
+  sender.join();
+  CHECK(ReadFile(port, buffer, 1, &got, nullptr) && got == 1 && buffer[0] == 0xD3);
+
+  // TerminateThread ends a thread that waits for the next punch.
+  struct Waiter {
+    HANDLE port;
+    std::atomic<bool> waiting{false};
+    std::atomic<bool> done{false};
+    std::atomic<DWORD> error{0};
+  } waiter{port};
+  const HANDLE monitor = reinterpret_cast<HANDLE>(_beginthread(
+      [](void *argument) {
+        Waiter &state = *static_cast<Waiter *>(argument);
+        DWORD mask = 0;
+        state.waiting = true;
+        if (!WaitCommEvent(state.port, &mask, nullptr))
+          state.error = GetLastError();
+        state.done = true;
+      },
+      0, &waiter));
+  for (int wait = 0; wait < 100 && !waiter.waiting; wait++)
+    Sleep(10);
+  Sleep(50);
+  CHECK(!waiter.done);
+  CHECK(TerminateThread(monitor, 0));
+  for (int wait = 0; wait < 100 && !waiter.done; wait++)
+    Sleep(10);
+  CHECK(waiter.done && waiter.error == ERROR_OPERATION_ABORTED);
+
+  CHECK(CloseHandle(port));
+  CHECK(!CloseHandle(port)); // Closing twice is an error, not a crash.
+  ::close(master);
+
+  // Port names outside the COM scheme, and ports without a device, fail to open.
+  CHECK(CreateFile(L"//./COM999", GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr) ==
+        INVALID_HANDLE_VALUE);
+  CHECK(GetLastError() == ERROR_FILE_NOT_FOUND);
+  CHECK(CreateFile(L"//./LPT1", GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr) ==
+        INVALID_HANDLE_VALUE);
+
+  // QueryDosDevice lists the serial ports as a double null terminated string list.
+  wchar_t devices[4096] = {0};
+  const DWORD length = QueryDosDevice(nullptr, devices, 4096);
+  if (length > 0) {
+    CHECK(devices[length - 1] == 0 && devices[length - 2] == 0);
+    for (DWORD i = 0; i < length - 1; i += std::wcslen(&devices[i]) + 1)
+      CHECK(std::wcsncmp(&devices[i], L"COM", 3) == 0);
+  }
+  CHECK(QueryDosDevice(nullptr, devices, 1) == 0); // Too small, if there are ports at all.
+}
+
+// The calls MonitorTCPSI in SportIdent.cpp makes, over the loopback interface.
+void testSockets() {
+  WSADATA data;
+  CHECK(WSAStartup(0x101, &data) == 0);
+
+  const SOCKET server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  CHECK(server != INVALID_SOCKET);
+  sockaddr_in local = {};
+  local.sin_family = AF_INET;
+  local.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  local.sin_port = 0;
+  CHECK(bind(server, (sockaddr *)&local, sizeof(local)) == 0);
+  CHECK(listen(server, 1) == 0);
+  socklen_t boundLength = sizeof(local);
+  CHECK(getsockname(static_cast<int>(server), (sockaddr *)&local, &boundLength) == 0);
+
+  std::thread sender([local] {
+    const int client = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (::connect(client, (sockaddr *)&local, sizeof(local)) == 0) {
+      const ssize_t sent = ::send(client, "punch", 5, 0);
+      (void)sent;
+    }
+    ::close(client);
+  });
+
+  sockaddr_in from;
+  int fromLength = sizeof(from);
+  const SOCKET client = accept(server, (sockaddr *)&from, &fromLength);
+  CHECK(client != INVALID_SOCKET);
+  CHECK(fromLength == sizeof(sockaddr_in) && from.sin_family == AF_INET);
+  char buffer[8] = {0};
+  CHECK(recv(client, buffer, 5, MSG_WAITALL) == 5 && std::string(buffer) == "punch");
+  sender.join();
+  CHECK(closesocket(client) == 0);
+
+  // As in SportIdent::closeCom: shutting the listening socket down ends a blocked accept.
+  std::atomic<int> acceptError{0};
+  std::thread listener([&] {
+    int length = sizeof(from);
+    if (accept(server, (sockaddr *)&from, &length) == INVALID_SOCKET)
+      acceptError = WSAGetLastError();
+  });
+  Sleep(50);
+  shutdown(server, SD_BOTH);
+  listener.join();
+  CHECK(acceptError != 0);
+  CHECK(closesocket(server) == 0);
+  CHECK(WSACleanup() == 0);
+}
+
 } // namespace
 
 int main() {
@@ -197,6 +419,9 @@ int main() {
   testTime();
   testPathsAndIntegers();
   testFiles();
+  testThreads();
+  testSerialPort();
+  testSockets();
 
   if (failures) {
     std::fprintf(stderr, "%d check(s) failed\n", failures);

@@ -11,10 +11,9 @@
 // Only on the include path for non-Windows builds. Declares the Win32 types,
 // macros and structures that MeOS headers use, so that they parse unchanged.
 //
-// Functions in the sections for strings, date and time, and the file system are
-// implemented in code/platform/posix. Functions in sections marked "stage 1" are
-// declared so that the portable code compiles; they are implemented together with
-// the Qt backend.
+// Functions in the sections that name an implementation file are implemented in
+// code/platform/posix. Functions in sections marked "stage 1" are declared so that
+// the portable code compiles; they are implemented together with the Qt backend.
 
 #pragma once
 
@@ -50,6 +49,7 @@ typedef DWORD          COLORREF;
 typedef DWORD          LCID;
 typedef std::uint16_t  ATOM;
 typedef BYTE          *LPBYTE;
+typedef WORD          *LPWORD;
 typedef BOOL          *LPBOOL;
 
 typedef wchar_t        TCHAR;
@@ -73,6 +73,11 @@ typedef LRESULT (CALLBACK *WNDPROC)(HWND, UINT, WPARAM, LPARAM);
 #define MAX_PATH 260
 #define MAX_COMPUTERNAME_LENGTH 15
 #define TEXT(s) L##s
+
+#define LOBYTE(w) ((BYTE)((DWORD_PTR)(w) & 0xFF))
+#define HIBYTE(w) ((BYTE)(((DWORD_PTR)(w) >> 8) & 0xFF))
+#define MAKEWORD(low, high) ((WORD)(((BYTE)((DWORD_PTR)(low) & 0xFF)) | ((WORD)((BYTE)((DWORD_PTR)(high) & 0xFF))) << 8))
+#define MAKELONG(low, high) ((LONG)(((WORD)((DWORD_PTR)(low) & 0xFFFF)) | ((DWORD)((WORD)((DWORD_PTR)(high) & 0xFFFF))) << 16))
 
 #define RGB(r, g, b) ((COLORREF)(((BYTE)(r) | ((WORD)((BYTE)(g)) << 8)) | (((DWORD)(BYTE)(b)) << 16)))
 #define GetRValue(rgb) ((BYTE)(rgb))
@@ -306,6 +311,94 @@ DWORD FormatMessage(DWORD flags, LPCVOID source, DWORD messageId, DWORD language
 HLOCAL LocalFree(HLOCAL memory);
 BOOL GetComputerName(LPWSTR buffer, LPDWORD size);
 DWORD GetCurrentThreadId();
+
+/* ---------------------------------------------------------------------
+   Serial ports: code/platform/posix/win32_serial.cpp
+   --------------------------------------------------------------------- */
+#define ERROR_OPERATION_ABORTED 995
+
+#define CBR_4800   4800
+#define CBR_9600   9600
+#define CBR_19200  19200
+#define CBR_38400  38400
+#define CBR_57600  57600
+#define CBR_115200 115200
+
+#define NOPARITY    0
+#define ODDPARITY   1
+#define EVENPARITY  2
+#define MARKPARITY  3
+#define SPACEPARITY 4
+
+#define ONESTOPBIT   0
+#define ONE5STOPBITS 1
+#define TWOSTOPBITS  2
+
+#define DTR_CONTROL_DISABLE   0x00
+#define DTR_CONTROL_ENABLE    0x01
+#define DTR_CONTROL_HANDSHAKE 0x02
+
+#define RTS_CONTROL_DISABLE   0x00
+#define RTS_CONTROL_ENABLE    0x01
+#define RTS_CONTROL_HANDSHAKE 0x02
+#define RTS_CONTROL_TOGGLE    0x03
+
+#define EV_RXCHAR 0x0001
+
+// Bit field layout of the Windows structure: MeOS sets DCBlength to sizeof(DCB).
+typedef struct _DCB {
+  DWORD DCBlength;
+  DWORD BaudRate;
+  DWORD fBinary           : 1;
+  DWORD fParity           : 1;
+  DWORD fOutxCtsFlow      : 1;
+  DWORD fOutxDsrFlow      : 1;
+  DWORD fDtrControl       : 2;
+  DWORD fDsrSensitivity   : 1;
+  DWORD fTXContinueOnXoff : 1;
+  DWORD fOutX             : 1;
+  DWORD fInX              : 1;
+  DWORD fErrorChar        : 1;
+  DWORD fNull             : 1;
+  DWORD fRtsControl       : 2;
+  DWORD fAbortOnError     : 1;
+  DWORD fDummy2           : 17;
+  WORD  wReserved;
+  WORD  XonLim;
+  WORD  XoffLim;
+  BYTE  ByteSize;
+  BYTE  Parity;
+  BYTE  StopBits;
+  char  XonChar;
+  char  XoffChar;
+  char  ErrorChar;
+  char  EofChar;
+  char  EvtChar;
+  WORD  wReserved1;
+} DCB, *LPDCB;
+
+BOOL ReadFile(HANDLE file, LPVOID buffer, DWORD count, LPDWORD read, LPVOID overlapped);
+BOOL WriteFile(HANDLE file, LPCVOID buffer, DWORD count, LPDWORD written, LPVOID overlapped);
+BOOL GetCommState(HANDLE file, LPDCB state);
+BOOL SetCommState(HANDLE file, LPDCB state);
+BOOL GetCommTimeouts(HANDLE file, COMMTIMEOUTS *timeouts);
+BOOL SetCommTimeouts(HANDLE file, COMMTIMEOUTS *timeouts);
+BOOL SetCommMask(HANDLE file, DWORD mask);
+BOOL WaitCommEvent(HANDLE file, LPDWORD mask, LPVOID overlapped);
+DWORD QueryDosDevice(LPCWSTR deviceName, LPWSTR targetPath, DWORD max);
+
+/* ---------------------------------------------------------------------
+   Threads and synchronisation: code/platform/posix/win32_threads.cpp
+   --------------------------------------------------------------------- */
+#define STILL_ACTIVE 259
+
+void Sleep(DWORD milliseconds);
+void InitializeCriticalSection(CRITICAL_SECTION *section);
+void DeleteCriticalSection(CRITICAL_SECTION *section);
+void EnterCriticalSection(CRITICAL_SECTION *section);
+void LeaveCriticalSection(CRITICAL_SECTION *section);
+BOOL TerminateThread(HANDLE thread, DWORD exitCode);
+BOOL GetExitCodeThread(HANDLE thread, LPDWORD exitCode);
 
 /* ---------------------------------------------------------------------
    Embedded resources (stage 1). MeOS loads language tables and images

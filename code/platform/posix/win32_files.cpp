@@ -45,13 +45,6 @@ DWORD attributesOf(const std::string &path, const std::string &name, const struc
   return attributes;
 }
 
-class FileHandle : public meos_platform::Win32Object {
-public:
-  explicit FileHandle(int fd) : fd(fd) {}
-  ~FileHandle() override { ::close(fd); }
-  const int fd;
-};
-
 class FindHandle : public meos_platform::Win32Object {
 public:
   ~FindHandle() override {
@@ -186,7 +179,17 @@ HANDLE CreateFile(LPCWSTR fileName, DWORD access, DWORD /*shareMode*/, LPSECURIT
       return INVALID_HANDLE_VALUE;
   }
 
-  const int fd = ::open(meos_compat::nativePath(fileName).c_str(), flags, 0666);
+  const std::string path = meos_compat::nativePath(fileName);
+
+  // Device names such as \\.\COM3 always denote a serial port.
+  if (path.compare(0, 4, "//./") == 0) {
+    std::shared_ptr<meos_platform::Win32Object> port =
+        meos_platform::openSerialPort(path.substr(4), read, write);
+    return port ? meos_platform::registerObject(std::move(port)) : INVALID_HANDLE_VALUE;
+  }
+
+  // O_NOCTTY and O_NONBLOCK matter for terminals, and have no effect on regular files.
+  const int fd = ::open(path.c_str(), flags | O_NOCTTY | O_NONBLOCK, 0666);
   if (fd < 0) {
     const int error = errno;
     SetLastError(disposition == CREATE_NEW && error == EEXIST ? ERROR_FILE_EXISTS
@@ -194,16 +197,12 @@ HANDLE CreateFile(LPCWSTR fileName, DWORD access, DWORD /*shareMode*/, LPSECURIT
     return INVALID_HANDLE_VALUE;
   }
   SetLastError(ERROR_SUCCESS);
-  return meos_platform::toHandle(new FileHandle(fd));
-}
 
-BOOL CloseHandle(HANDLE handle) {
-  if (!handle || handle == INVALID_HANDLE_VALUE) {
-    SetLastError(ERROR_INVALID_HANDLE);
-    return FALSE;
-  }
-  delete static_cast<meos_platform::Win32Object *>(handle);
-  return TRUE;
+  if (::isatty(fd))
+    return meos_platform::registerObject(meos_platform::makeSerialObject(fd));
+
+  ::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL, 0) & ~O_NONBLOCK);
+  return meos_platform::registerObject(std::make_shared<meos_platform::FileObject>(fd));
 }
 
 BOOL DeleteFile(LPCWSTR fileName) {
@@ -272,7 +271,7 @@ HANDLE FindFirstFile(LPCWSTR fileName, LPWIN32_FIND_DATA findData) {
 
   const std::string path = meos_compat::nativePath(fileName);
   const std::size_t slash = path.rfind('/');
-  auto find = std::make_unique<FindHandle>();
+  auto find = std::make_shared<FindHandle>();
   find->directory = slash == std::string::npos ? "." : slash == 0 ? "/" : path.substr(0, slash);
 
   // Windows patterns know only '*' and '?'; '*.*' also matches names without a dot.
@@ -303,11 +302,11 @@ HANDLE FindFirstFile(LPCWSTR fileName, LPWIN32_FIND_DATA findData) {
     SetLastError(ERROR_FILE_NOT_FOUND);
     return INVALID_HANDLE_VALUE;
   }
-  return meos_platform::toHandle(find.release());
+  return meos_platform::registerObject(std::move(find));
 }
 
 BOOL FindNextFile(HANDLE findFile, LPWIN32_FIND_DATA findData) {
-  FindHandle *find = meos_platform::fromHandle<FindHandle>(findFile);
+  const std::shared_ptr<FindHandle> find = meos_platform::fromHandle<FindHandle>(findFile);
   if (!find || !findData) {
     SetLastError(ERROR_INVALID_HANDLE);
     return FALSE;
@@ -320,12 +319,11 @@ BOOL FindNextFile(HANDLE findFile, LPWIN32_FIND_DATA findData) {
 }
 
 BOOL FindClose(HANDLE findFile) {
-  FindHandle *find = meos_platform::fromHandle<FindHandle>(findFile);
-  if (!find) {
+  if (!meos_platform::fromHandle<FindHandle>(findFile)) {
     SetLastError(ERROR_INVALID_HANDLE);
     return FALSE;
   }
-  delete find;
+  meos_platform::unregisterObject(findFile);
   return TRUE;
 }
 

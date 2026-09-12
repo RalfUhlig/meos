@@ -126,12 +126,23 @@ add_library(meos_core OBJECT ${MEOS_CORE_SOURCES})
 meos_apply_settings(meos_core)
 
 if(NOT WIN32)
+  find_package(Threads REQUIRED)
+
   # The subset of the Win32 API used by the portable code, implemented with POSIX means.
   add_library(meos_platform OBJECT
     platform/posix/win32_files.cpp
+    platform/posix/win32_handle.cpp
+    platform/posix/win32_serial.cpp
     platform/posix/win32_strings.cpp
+    platform/posix/win32_threads.cpp
     platform/posix/win32_time.cpp)
   meos_apply_settings(meos_platform)
+  target_link_libraries(meos_platform PUBLIC Threads::Threads)
+
+  # The SI reader (stage 1.1). Compiled to keep it building; it is linked into the
+  # application once the GUI backend exists.
+  add_library(meos_si OBJECT SportIdent.cpp)
+  meos_apply_settings(meos_si)
 
   # Self test of the compatibility layer (run with ctest).
   add_executable(meos_platform_selftest platform/posix/tests/platform_selftest.cpp)

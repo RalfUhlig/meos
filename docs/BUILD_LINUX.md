@@ -55,6 +55,18 @@ Notes:
   sudo usermod -aG dialout "$USER"   # log out and in again afterwards
   ```
 
+  MeOS names serial ports the Windows way, so a COM number stands for a device by this fixed
+  scheme (independent of what is plugged in, so a port chosen for a competition keeps its
+  meaning):
+
+  | Port in MeOS | Device | Typical use |
+  |---|---|---|
+  | COM1 – COM32 | `/dev/ttyUSB0` … | USB serial adapters: the SI master stations |
+  | COM33 – COM64 | `/dev/ttyACM0` … | USB CDC devices |
+  | COM65 – COM96 | `/dev/ttyS0` … | built-in UARTs |
+
+  A device path such as `/dev/ttyUSB0` is accepted wherever a port name is asked for as well.
+
 - **Locale.** String comparison and date/time formatting follow the user locale, as on Windows.
   `LANG` must name an installed UTF-8 locale (e.g. `de_DE.UTF-8`); `locale -a` lists the installed
   ones.
