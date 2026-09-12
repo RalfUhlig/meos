@@ -216,6 +216,15 @@ DWORD CharUpperBuff(LPWSTR buffer, DWORD length) {
   return length;
 }
 
+// As on Windows, a pointer value below 0x10000 is a single character to convert.
+LPWSTR CharLower(LPWSTR text) {
+  const std::ctype<wchar_t> &ctype = std::use_facet<std::ctype<wchar_t>>(userLocale());
+  if ((std::uintptr_t)text >> 16 == 0)
+    return (LPWSTR)(std::uintptr_t)ctype.tolower((wchar_t)(std::uintptr_t)text);
+  ctype.tolower(text, text + std::wcslen(text));
+  return text;
+}
+
 int lstrcmpi(LPCWSTR a, LPCWSTR b) {
   return CompareString(LOCALE_USER_DEFAULT, NORM_IGNORECASE, a, -1, b, -1) - CSTR_EQUAL;
 }

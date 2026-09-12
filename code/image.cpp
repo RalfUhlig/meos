@@ -233,7 +233,7 @@ uint64_t Image::computeHash(const vector<uint8_t>& data) {
 
 void Image::read_file(const wstring& filename, vector<uint8_t>& data) {
   std::ifstream fin;
-  fin.open(filename, std::ios::binary);
+  fin.open(meosPath(filename), std::ios::binary);
   fin.seekg(0, std::ios::end);
   int p2 = (int)fin.tellg();
   fin.seekg(0, std::ios::beg);

@@ -263,6 +263,18 @@ DWORD GetCurrentDirectory(DWORD bufferLength, LPWSTR buffer) {
   return static_cast<DWORD>(directory.size());
 }
 
+BOOL SetCurrentDirectory(LPCWSTR path) {
+  if (!path) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return FALSE;
+  }
+  if (::chdir(meos_compat::nativePath(path).c_str()) != 0) {
+    SetLastError(meos_platform::win32ErrorFromErrno(errno));
+    return FALSE;
+  }
+  return TRUE;
+}
+
 HANDLE FindFirstFile(LPCWSTR fileName, LPWIN32_FIND_DATA findData) {
   if (!fileName || !findData) {
     SetLastError(ERROR_INVALID_PARAMETER);

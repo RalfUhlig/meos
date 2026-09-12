@@ -1346,7 +1346,7 @@ void SaveMachine::save(oEvent& oe, gdioutput& gdi, bool doProcess) {
 
   if (doProcess) {
     wstring sample = f + L"sample.txt";
-    ofstream fout(sample.c_str(), ios_base::trunc | ios_base::out);
+    ofstream fout(meosPath(sample), ios_base::trunc | ios_base::out);
     bool bad = false;
     if (fout.bad())
       bad = true;

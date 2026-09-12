@@ -135,7 +135,7 @@ class TabCompetition :
   void selectExportSplitOptions(gdioutput& gdi);
 
   void showSelectId(std::pair<bool, bool>& priSecondId, gdioutput& gdi);
-  tuple<string, string, bool> TabCompetition::getPreferredIdTypes(gdioutput& gdi);
+  tuple<string, string, bool> getPreferredIdTypes(gdioutput& gdi);
 
   void saveExtraFields(gdioutput& gdi, oEvent::ExtraFieldContext type);
 

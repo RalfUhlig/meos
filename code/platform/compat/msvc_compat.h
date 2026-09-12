@@ -44,6 +44,7 @@
 #include <mutex>
 #include <thread>
 #include <tuple>
+#include <typeinfo>
 
 #include <strings.h>
 #include <sys/stat.h>
@@ -87,6 +88,15 @@ typedef std::int64_t __int64;
 #define __declspec(x)
 #define __stdcall
 #define __cdecl
+
+// MSVC's architecture macro. MeOS uses it to add overloads that are only distinct from
+// the size_t ones on 64-bit targets (gdistructures.h).
+#if defined(__x86_64__) && !defined(_M_X64)
+#define _M_X64 100
+#endif
+
+// MSVC declares type_info in the global namespace as well.
+using std::type_info;
 
 #define _TRUNCATE ((std::size_t)-1)
 #define STRUNCATE 80

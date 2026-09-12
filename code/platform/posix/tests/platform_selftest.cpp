@@ -75,6 +75,10 @@ void testCodePages() {
   CHECK(CompareString(LOCALE_USER_DEFAULT, NORM_IGNORECASE, L"abc", -1, L"ABC", -1) == CSTR_EQUAL);
   CHECK(CompareString(LOCALE_USER_DEFAULT, 0, L"abc", -1, L"abd", -1) == CSTR_LESS_THAN);
   CHECK(lstrcmpi(L"Meos", L"MEOS") == 0);
+
+  wchar_t lower[] = L"\u00c5SA \u00d6stberg";
+  CHECK(CharLower(lower) == lower && std::wstring(lower) == L"\u00e5sa \u00f6stberg");
+  CHECK((std::uintptr_t)CharLower((LPWSTR)(std::uintptr_t)L'\u00c4') == L'\u00e4');
 }
 
 void testTime() {
@@ -184,6 +188,13 @@ void testFiles() {
   CHECK(CopyFile((dir + L"\\a.xml").c_str(), (dir + L"\\d.xml").c_str(), TRUE));
   CHECK(DeleteFile((dir + L"\\d.xml").c_str()));
   CHECK(!DeleteFile((dir + L"\\d.xml").c_str()) && GetLastError() == ERROR_FILE_NOT_FOUND);
+
+  wchar_t previous[MAX_PATH];
+  CHECK(GetCurrentDirectory(MAX_PATH, previous) > 0);
+  CHECK(SetCurrentDirectory((dir + L"\\").c_str()));
+  CHECK(std::filesystem::equivalent(std::filesystem::current_path(), base));
+  CHECK(!SetCurrentDirectory((dir + L"\\missing").c_str()) && GetLastError() == ERROR_FILE_NOT_FOUND);
+  CHECK(SetCurrentDirectory(previous));
 
   std::ofstream out(meosPath(dir + L"\\stream.txt"));
   out << "ok";

@@ -3,8 +3,9 @@
 # code/MeOS.vcxproj remains a second build path on Windows. cmake/VcxprojSync.cmake
 # fails the configure step if both definitions list different source files.
 #
-# Linux port, stage 0: only meos_core (the platform independent domain logic) is
-# built on Linux. The remaining groups follow in later stages, see plans/linux-port.md.
+# Linux port: meos_core (the platform independent domain logic) is built on Linux; the
+# other groups are compiled but not yet linked and follow in later stages, see
+# plans/linux-port.md.
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CaseAliases)
@@ -143,6 +144,14 @@ if(NOT WIN32)
   # application once the GUI backend exists.
   add_library(meos_si OBJECT SportIdent.cpp)
   meos_apply_settings(meos_si)
+
+  # The GDI/window based sources and the tabs (stage 1.2). Compiled against the Win32
+  # declarations in platform/compat/win32; linked once the Qt backend implements them.
+  add_library(meos_gui OBJECT
+    animationdata.cpp autocomplete.cpp autotask.cpp gdioutput.cpp image.cpp maprenderer.cpp
+    printer.cpp progress.cpp Table.cpp toolbar.cpp
+    ${MEOS_UI_SOURCES})
+  meos_apply_settings(meos_gui)
 
   # Self test of the compatibility layer (run with ctest).
   add_executable(meos_platform_selftest platform/posix/tests/platform_selftest.cpp)

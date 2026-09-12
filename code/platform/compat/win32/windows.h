@@ -11,9 +11,13 @@
 // Only on the include path for non-Windows builds. Declares the Win32 types,
 // macros and structures that MeOS headers use, so that they parse unchanged.
 //
-// Functions in the sections that name an implementation file are implemented in
-// code/platform/posix. Functions in sections marked "stage 1" are declared so that
-// the portable code compiles; they are implemented together with the Qt backend.
+// Functions in the sections that name an implementation file in code/platform/posix
+// are implemented there. Sections that name a file in code/platform/qt belong to the
+// Qt backend (stage 1.2, see plans/linux-port-1.2-qt-backend.md); until that file
+// exists, its functions are only declared so that the MeOS sources compile.
+//
+// As in the Windows SDK, the window manager and GDI parts are in winuser.h and
+// wingdi.h, which are included at the end of this header.
 
 #pragma once
 
@@ -33,6 +37,9 @@ MEOS_DECLARE_HANDLE(HMENU);
 MEOS_DECLARE_HANDLE(HICON);
 MEOS_DECLARE_HANDLE(HCURSOR);
 MEOS_DECLARE_HANDLE(HRSRC);
+MEOS_DECLARE_HANDLE(HACCEL);
+MEOS_DECLARE_HANDLE(HHOOK);
+MEOS_DECLARE_HANDLE(HMONITOR);
 
 typedef void     *HANDLE;
 typedef HANDLE    HGLOBAL;
@@ -51,6 +58,13 @@ typedef std::uint16_t  ATOM;
 typedef BYTE          *LPBYTE;
 typedef WORD          *LPWORD;
 typedef BOOL          *LPBOOL;
+typedef int            INT;
+typedef std::uint16_t  USHORT;
+typedef std::size_t    SIZE_T;
+typedef void          *PVOID;
+
+// From rpcndr.h, which windows.h includes.
+typedef unsigned char  byte;
 
 typedef wchar_t        TCHAR;
 typedef wchar_t       *LPTSTR;
@@ -78,6 +92,11 @@ typedef LRESULT (CALLBACK *WNDPROC)(HWND, UINT, WPARAM, LPARAM);
 #define HIBYTE(w) ((BYTE)(((DWORD_PTR)(w) >> 8) & 0xFF))
 #define MAKEWORD(low, high) ((WORD)(((BYTE)((DWORD_PTR)(low) & 0xFF)) | ((WORD)((BYTE)((DWORD_PTR)(high) & 0xFF))) << 8))
 #define MAKELONG(low, high) ((LONG)(((WORD)((DWORD_PTR)(low) & 0xFFFF)) | ((DWORD)((WORD)((DWORD_PTR)(high) & 0xFFFF))) << 16))
+#define LOWORD(l) ((WORD)((DWORD_PTR)(l) & 0xFFFF))
+#define HIWORD(l) ((WORD)(((DWORD_PTR)(l) >> 16) & 0xFFFF))
+
+#define MAXUINT ((UINT)~((UINT)0))
+#define MAXINT  ((INT)(MAXUINT >> 1))
 
 #define RGB(r, g, b) ((COLORREF)(((BYTE)(r) | ((WORD)((BYTE)(g)) << 8)) | (((DWORD)(BYTE)(b)) << 16)))
 #define GetRValue(rgb) ((BYTE)(rgb))
@@ -105,10 +124,15 @@ typedef struct tagPOINT {
   LONG y;
 } POINT, *LPPOINT;
 
+typedef struct _POINTL {
+  LONG x;
+  LONG y;
+} POINTL;
+
 typedef struct tagSIZE {
   LONG cx;
   LONG cy;
-} SIZE;
+} SIZE, *LPSIZE;
 
 // The anonymous struct members are a Microsoft extension that GCC and Clang accept as well.
 typedef union _LARGE_INTEGER {
@@ -181,16 +205,7 @@ typedef struct _CRITICAL_SECTION {
   std::uintptr_t SpinCount;
 } CRITICAL_SECTION;
 
-/* Placeholder with the size of DEVMODEW; only the Windows printing code uses its fields. */
-typedef struct _devicemodeW {
-  BYTE data[220];
-} DEVMODE;
-
 /* Only used through pointers in MeOS headers. */
-struct tagLOGFONTW;
-typedef struct tagLOGFONTW LOGFONT;
-struct tagTEXTMETRICW;
-typedef struct tagTEXTMETRICW TEXTMETRIC;
 struct _TIME_ZONE_INFORMATION;
 typedef struct _TIME_ZONE_INFORMATION TIME_ZONE_INFORMATION;
 struct _SECURITY_ATTRIBUTES;
@@ -223,6 +238,7 @@ int lstrcmpi(LPCWSTR a, LPCWSTR b);
 BOOL IsCharAlphaNumeric(WCHAR ch);
 DWORD CharLowerBuff(LPWSTR buffer, DWORD length);
 DWORD CharUpperBuff(LPWSTR buffer, DWORD length);
+LPWSTR CharLower(LPWSTR text);
 void OutputDebugString(LPCWSTR text);
 void OutputDebugStringA(LPCSTR text);
 
@@ -269,6 +285,7 @@ int GetTimeFormatA(LCID locale, DWORD flags, const SYSTEMTIME *time, LPCSTR form
 #define ERROR_DISK_FULL           112
 #define ERROR_INSUFFICIENT_BUFFER 122
 #define ERROR_ALREADY_EXISTS      183
+#define ERROR_CANCELLED           1223
 
 #define GENERIC_READ  0x80000000UL
 #define GENERIC_WRITE 0x40000000UL
@@ -303,6 +320,7 @@ BOOL DeleteFile(LPCWSTR fileName);
 BOOL CopyFile(LPCWSTR existingFileName, LPCWSTR newFileName, BOOL failIfExists);
 DWORD GetFileAttributes(LPCWSTR fileName);
 DWORD GetCurrentDirectory(DWORD bufferLength, LPWSTR buffer);
+BOOL SetCurrentDirectory(LPCWSTR path);
 HANDLE FindFirstFile(LPCWSTR fileName, LPWIN32_FIND_DATA findData);
 BOOL FindNextFile(HANDLE findFile, LPWIN32_FIND_DATA findData);
 BOOL FindClose(HANDLE findFile);
@@ -401,43 +419,33 @@ BOOL TerminateThread(HANDLE thread, DWORD exitCode);
 BOOL GetExitCodeThread(HANDLE thread, LPDWORD exitCode);
 
 /* ---------------------------------------------------------------------
-   Embedded resources (stage 1). MeOS loads language tables and images
-   from resources compiled in via meos.rc and meoslang.rc.
+   Embedded resources: code/platform/qt/win32_resources.cpp. MeOS loads
+   language tables and images from resources compiled in via meos.rc and
+   meoslang.rc.
    --------------------------------------------------------------------- */
+#define MAKEINTRESOURCE(id) ((LPWSTR)(std::uintptr_t)((WORD)(id)))
+#define IS_INTRESOURCE(p)   (((std::uintptr_t)(p) >> 16) == 0)
+
+HMODULE GetModuleHandle(LPCWSTR moduleName);
 HRSRC FindResource(HMODULE module, LPCWSTR name, LPCWSTR type);
 HGLOBAL LoadResource(HMODULE module, HRSRC resource);
 LPVOID LockResource(HGLOBAL data);
 DWORD SizeofResource(HMODULE module, HRSRC resource);
 
 /* ---------------------------------------------------------------------
-   Windowing and GDI (stage 1, replaced by the Qt backend).
+   Global memory blocks (clipboard and printer settings):
+   code/platform/qt/win32_clipboard.cpp
    --------------------------------------------------------------------- */
-#define WM_USER 0x0400
+#define GMEM_FIXED    0x0000
+#define GMEM_MOVEABLE 0x0002
+#define GMEM_ZEROINIT 0x0040
+#define GMEM_DDESHARE 0x2000
 
-#define MB_OK                0x00000000
-#define MB_OKCANCEL          0x00000001
-#define MB_YESNOCANCEL       0x00000003
-#define MB_YESNO             0x00000004
-#define MB_ICONQUESTION      0x00000020
-#define MB_ICONEXCLAMATION   0x00000030
-#define MB_ICONWARNING       0x00000030
-#define MB_ICONINFORMATION   0x00000040
+HGLOBAL GlobalAlloc(UINT flags, SIZE_T bytes);
+LPVOID GlobalLock(HGLOBAL memory);
+BOOL GlobalUnlock(HGLOBAL memory);
+SIZE_T GlobalSize(HGLOBAL memory);
+HGLOBAL GlobalFree(HGLOBAL memory);
 
-#define IDOK     1
-#define IDCANCEL 2
-#define IDYES    6
-#define IDNO     7
-
-#define GDI_ERROR 0xFFFFFFFFL
-
-int MessageBox(HWND owner, LPCWSTR text, LPCWSTR caption, UINT type);
-BOOL PostMessage(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
-BOOL DestroyWindow(HWND window);
-BOOL InvalidateRect(HWND window, const RECT *rect, BOOL erase);
-HDC GetDC(HWND window);
-int ReleaseDC(HWND window, HDC dc);
-HDC CreateCompatibleDC(HDC dc);
-BOOL DeleteDC(HDC dc);
-HGDIOBJ SelectObject(HDC dc, HGDIOBJ object);
-DWORD GetFontData(HDC dc, DWORD table, DWORD offset, LPVOID buffer, DWORD size);
-BOOL GetTextExtentPoint32A(HDC dc, LPCSTR text, int length, SIZE *size);
+#include "winuser.h"
+#include "wingdi.h"

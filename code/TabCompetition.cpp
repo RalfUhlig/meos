@@ -1715,7 +1715,7 @@ int TabCompetition::competitionCB(gdioutput &gdi, GuiEventType type, BaseInfo *d
       ext.push_back(make_pair(L"Textfiler", L"*.txt"));
 
       wstring file=gdi.browseForOpen(ext, L"txt");
-      ifstream fin(file.c_str());
+      ifstream fin(meosPath(file));
       char bf[1024];
       bf[0]='\r';//WCS
       bf[1]='\n';

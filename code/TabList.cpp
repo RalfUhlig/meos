@@ -3561,7 +3561,7 @@ ListEditor *TabList::getListEditorPtr() const {
 }
 
 gdioutput* TabList::showList(gdioutput& gdi, const oListInfo& listInfo, ListUpdater* listUpdater, bool hideToolButtons) {
-  auto &[gdiT, listT] = makeOwnWindow(gdi, true, listInfo);
+  auto [gdiT, listT] = makeOwnWindow(gdi, true, listInfo);
   listT->currentList = listInfo;
   listT->listUpdater = listUpdater;
   listT->hideButtons = hideToolButtons;
