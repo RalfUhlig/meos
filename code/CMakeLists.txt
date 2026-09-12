@@ -153,11 +153,33 @@ if(NOT WIN32)
     ${MEOS_UI_SOURCES})
   meos_apply_settings(meos_gui)
 
+  # The Win32 window manager subset (USER32) on Qt 6 widgets (stage 1.2).
+  find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets)
+  add_library(meos_win32ui OBJECT
+    platform/qt/win32_app.cpp
+    platform/qt/win32_canvas.cpp
+    platform/qt/win32_message.cpp
+    platform/qt/win32_window.cpp)
+  meos_apply_settings(meos_win32ui)
+  target_link_libraries(meos_win32ui PUBLIC meos_platform Qt6::Widgets)
+
+  # main() for programs that define WinMain.
+  add_library(meos_win32ui_main OBJECT platform/qt/win32_main.cpp)
+  meos_apply_settings(meos_win32ui_main)
+  target_link_libraries(meos_win32ui_main PUBLIC Qt6::Widgets)
+
   # Self test of the compatibility layer (run with ctest).
   add_executable(meos_platform_selftest platform/posix/tests/platform_selftest.cpp)
   meos_apply_settings(meos_platform_selftest)
   target_link_libraries(meos_platform_selftest PRIVATE meos_platform)
   add_test(NAME platform_selftest COMMAND meos_platform_selftest)
+
+  add_executable(meos_win32ui_selftest platform/qt/tests/win32ui_selftest.cpp)
+  meos_apply_settings(meos_win32ui_selftest)
+  # Object libraries do not pass their objects on, so both are linked here.
+  target_link_libraries(meos_win32ui_selftest PRIVATE meos_win32ui meos_platform Qt6::Widgets)
+  add_test(NAME win32ui_selftest COMMAND meos_win32ui_selftest)
+  set_tests_properties(win32ui_selftest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   # Compile-time checks that binary file structures keep their Windows layout.
   add_library(meos_layout_check OBJECT platform/posix/tests/layout_check.cpp)

@@ -1,8 +1,9 @@
 # Building MeOS on Linux
 
 The native Linux port is work in progress. At the moment the platform independent core
-(`meos_core`), the Win32 compatibility layer (`meos_platform`) and its tests build on Linux; the
-GUI, networking and hardware support follow in later stages. The packages below cover all stages,
+(`meos_core`), the Win32 compatibility layer (`meos_platform`), the first part of the Qt based
+window layer (`meos_win32ui`) and their tests build on Linux; the GUI, networking and hardware
+support follow in later stages. The packages below cover all stages,
 so that they only need to be installed once.
 
 ## Tested environment
@@ -77,6 +78,9 @@ Notes:
 cmake --preset linux-debug   && cmake --build --preset linux-debug   && ctest --preset linux-debug
 cmake --preset linux-release && cmake --build --preset linux-release && ctest --preset linux-release
 ```
+
+The tests need no display: the window layer test runs with Qt's `offscreen` platform plugin, which
+comes with `qt6-base-dev`.
 
 Debug builds use AddressSanitizer and UBSan (switch off with `-DMEOS_SANITIZE=OFF`); Release builds
 use `-O2 -g` with link-time optimization. Build output goes to `build/<preset>`.
