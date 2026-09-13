@@ -8,7 +8,7 @@
     (at your option) any later version. See LICENSE in the repository root.
 ************************************************************************/
 
-#include "win32_ui.h"
+#include "win32_gdi.h"
 
 #include <QGuiApplication>
 #include <QScreen>
@@ -96,6 +96,8 @@ void adjustUpdateRegion(Window &window, QSize newSize) {
   window.knownClientSize = newSize;
   if (!window.client || oldSize == newSize)
     return;
+  if (window.surface)
+    meos_qt::resizeSurface(*window.surface, newSize, window.client->devicePixelRatioF());
 
   const UINT classStyle = window.windowClass ? window.windowClass->style : 0;
   const bool redrawAll = !oldSize.isValid() ||
@@ -482,6 +484,14 @@ LRESULT DefWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
   case WM_WINDOWPOSCHANGED:
     sendSizeIfChanged(target);
     return 0;
+
+  // Fills the update region with the class background brush.
+  case WM_ERASEBKGND:
+    if (!target->windowClass || !target->windowClass->background)
+      return 0;
+    meos_qt::fillBackground(reinterpret_cast<HDC>(wParam), target->windowClass->background,
+                            QRect(QPoint(0, 0), meos_qt::clientSize(*target)));
+    return 1;
   }
   return 0;
 }

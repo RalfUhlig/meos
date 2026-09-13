@@ -12,8 +12,8 @@
 // shapes, gradients, bitmaps and DIB sections, fonts and text, and the printer device
 // context. Included by windows.h. Constants have their Windows values.
 //
-// Implemented by the Qt backend in code/platform/qt (stage 1.2); the file named in
-// each section does not exist yet.
+// Implemented by the Qt backend in code/platform/qt (stage 1.2), one file per section.
+// The printer device context is only declared so far (step 1.2.5).
 
 #pragma once
 
@@ -182,7 +182,8 @@ typedef struct _DOCINFOW {
    Device contexts, GDI objects, drawing and bitmaps:
    code/platform/qt/win32_gdi.cpp
    --------------------------------------------------------------------- */
-#define GDI_ERROR 0xFFFFFFFF
+#define GDI_ERROR   0xFFFFFFFF
+#define CLR_INVALID 0xFFFFFFFF
 
 #define WHITE_BRUSH  0
 #define LTGRAY_BRUSH 1
@@ -193,6 +194,12 @@ typedef struct _DOCINFOW {
 #define DC_PEN       19
 
 #define PS_SOLID 0
+#define PS_NULL  5
+
+#define RGN_ERROR     0
+#define NULLREGION    1
+#define SIMPLEREGION  2
+#define COMPLEXREGION 3
 
 #define TRANSPARENT 1
 #define OPAQUE      2
@@ -255,7 +262,10 @@ BOOL AlphaBlend(HDC dst, int x, int y, int width, int height, HDC src, int srcX,
 #define FF_MODERN     0x30
 
 #define ANSI_FIXED_FONT  11
+#define SYSTEM_FONT      13
 #define DEFAULT_GUI_FONT 17
+
+#define TRUETYPE_FONTTYPE 0x0004
 
 HFONT CreateFont(int height, int width, int escapement, int orientation, int weight, DWORD italic,
                  DWORD underline, DWORD strikeOut, DWORD charSet, DWORD outPrecision, DWORD clipPrecision,
@@ -267,7 +277,7 @@ BOOL GetTextExtentPoint32A(HDC dc, LPCSTR text, int length, LPSIZE size);
 DWORD GetFontData(HDC dc, DWORD table, DWORD offset, LPVOID buffer, DWORD size);
 
 /* ---------------------------------------------------------------------
-   Printer device context: code/platform/qt/win32_gdi.cpp
+   Printer device context: code/platform/qt/win32_gdi.cpp (step 1.2.5)
    Until stage 3 there is no printer; CreateDC fails.
    --------------------------------------------------------------------- */
 #define HORZSIZE        4

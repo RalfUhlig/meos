@@ -130,6 +130,7 @@ typedef struct tagTPMPARAMS *LPTPMPARAMS;
 #define WM_GETTEXT           0x000D
 #define WM_GETTEXTLENGTH     0x000E
 #define WM_QUIT              0x0012
+#define WM_ERASEBKGND        0x0014
 #define WM_SETFONT           0x0030
 #define WM_WINDOWPOSCHANGED  0x0047
 #define WM_NCACTIVATE        0x0086
@@ -334,8 +335,6 @@ SHORT GetKeyState(int virtualKey);
 
 /* ---------------------------------------------------------------------
    Painting and scrolling: code/platform/qt/win32_canvas.cpp
-   BeginPaint, EndPaint, GetDC, ReleaseDC and ScrollWindowEx need device
-   contexts and follow with the GDI part (step 1.2.3).
    --------------------------------------------------------------------- */
 #define SB_HORZ 0
 #define SB_VERT 1
@@ -358,6 +357,7 @@ SHORT GetKeyState(int virtualKey);
 
 #define SW_SCROLLCHILDREN 0x0001
 #define SW_INVALIDATE     0x0002
+#define SW_ERASE          0x0004
 #define SW_SMOOTHSCROLL   0x0010
 
 HDC BeginPaint(HWND window, PAINTSTRUCT *paint);
@@ -534,7 +534,8 @@ UINT RegisterClipboardFormat(LPCWSTR formatName);
 
 /* ---------------------------------------------------------------------
    Cursors, bitmaps, system metrics and colours, monitors:
-   code/platform/qt/win32_screen.cpp
+   code/platform/qt/win32_screen.cpp. Only GetSysColor is implemented so far;
+   the rest follows in step 1.2.5.
    --------------------------------------------------------------------- */
 #define IDC_ARROW MAKEINTRESOURCE(32512)
 #define IDC_WAIT  MAKEINTRESOURCE(32514)

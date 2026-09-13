@@ -158,7 +158,10 @@ if(NOT WIN32)
   add_library(meos_win32ui OBJECT
     platform/qt/win32_app.cpp
     platform/qt/win32_canvas.cpp
+    platform/qt/win32_gdi.cpp
     platform/qt/win32_message.cpp
+    platform/qt/win32_screen.cpp
+    platform/qt/win32_text.cpp
     platform/qt/win32_window.cpp)
   meos_apply_settings(meos_win32ui)
   target_link_libraries(meos_win32ui PUBLIC meos_platform Qt6::Widgets)
@@ -180,6 +183,28 @@ if(NOT WIN32)
   target_link_libraries(meos_win32ui_selftest PRIVATE meos_win32ui meos_platform Qt6::Widgets)
   add_test(NAME win32ui_selftest COMMAND meos_win32ui_selftest)
   set_tests_properties(win32ui_selftest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_executable(meos_gdi_selftest platform/qt/tests/gdi_selftest.cpp)
+  meos_apply_settings(meos_gdi_selftest)
+  target_link_libraries(meos_gdi_selftest PRIVATE meos_win32ui meos_platform Qt6::Widgets)
+  add_test(NAME gdi_selftest COMMAND meos_gdi_selftest)
+  set_tests_properties(gdi_selftest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  # Text metrics of the Qt backend, compared with those of Windows GDI once
+  # gdi_metrics_windows.csv has been created on Windows (see gdi_metrics.cpp).
+  add_executable(meos_gdi_metrics platform/qt/tests/gdi_metrics.cpp)
+  meos_apply_settings(meos_gdi_metrics)
+  target_link_libraries(meos_gdi_metrics PRIVATE meos_win32ui meos_win32ui_main meos_platform Qt6::Widgets)
+  add_test(NAME gdi_metrics COMMAND meos_gdi_metrics "${CMAKE_CURRENT_BINARY_DIR}/gdi_metrics_linux.csv")
+  set_tests_properties(gdi_metrics PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                       FIXTURES_SETUP gdi_metrics_csv)
+
+  add_executable(meos_gdi_metrics_compare platform/qt/tests/gdi_metrics_compare.cpp)
+  meos_apply_settings(meos_gdi_metrics_compare)
+  add_test(NAME gdi_metrics_compare
+           COMMAND meos_gdi_metrics_compare "${CMAKE_CURRENT_BINARY_DIR}/gdi_metrics_linux.csv"
+                   "${CMAKE_CURRENT_SOURCE_DIR}/platform/qt/tests/gdi_metrics_windows.csv" "Arial" "Times New Roman")
+  set_tests_properties(gdi_metrics_compare PROPERTIES FIXTURES_REQUIRED gdi_metrics_csv SKIP_RETURN_CODE 77)
 
   # Compile-time checks that binary file structures keep their Windows layout.
   add_library(meos_layout_check OBJECT platform/posix/tests/layout_check.cpp)

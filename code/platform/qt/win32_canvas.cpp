@@ -1,7 +1,8 @@
 /************************************************************************
     MeOS - Orienteering Software
     Linux port: widgets of windows with registered classes; input becomes
-    window messages, and the update region drives WM_PAINT.
+    window messages, the update region drives WM_PAINT, and a backing store
+    keeps what GDI drew.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -9,7 +10,7 @@
     (at your option) any later version. See LICENSE in the repository root.
 ************************************************************************/
 
-#include "win32_ui.h"
+#include "win32_gdi.h"
 
 #include <QCloseEvent>
 #include <QCursor>
@@ -22,6 +23,11 @@
 namespace {
 
 using meos_qt::Window;
+
+qreal backingStoreRatio(meos_qt::Surface &surface) {
+  std::lock_guard<std::mutex> lock(surface.mutex);
+  return surface.image.isNull() ? 0.0 : surface.image.devicePixelRatio();
+}
 
 std::shared_ptr<Window> windowOf(const QWidget *widget) {
   return meos_qt::findWindow(meos_qt::windowFromWidget(widget));
@@ -108,10 +114,21 @@ public:
   }
 
 protected:
-  void paintEvent(QPaintEvent * /*event*/) override {
-    if (const std::shared_ptr<Window> window = windowOf(this))
-      meos_qt::dispatchPaint(window);
-    // Step 1.2.3: copy the backing store to the screen.
+  // The window procedure paints the update region into the backing store, which
+  // is then copied to the screen. Areas Qt repaints for other reasons come from
+  // the backing store alone.
+  void paintEvent(QPaintEvent *event) override {
+    const std::shared_ptr<Window> window = windowOf(this);
+    if (!window || !window->surface)
+      return;
+    const std::shared_ptr<meos_qt::Surface> surface = window->surface;
+    if (devicePixelRatioF() != backingStoreRatio(*surface)) {
+      meos_qt::resizeSurface(*surface, size(), devicePixelRatioF());
+      meos_qt::invalidate(*window, rect(), true);
+    }
+    meos_qt::dispatchPaint(window);
+    QPainter painter(this);
+    meos_qt::copySurfaceToScreen(*surface, painter, event->region());
   }
 
   void mouseMoveEvent(QMouseEvent *event) override { sendMouse(this, event, WM_MOUSEMOVE); }
@@ -285,6 +302,7 @@ void meos_qt::createCanvas(Window &window, QWidget *parentWidget) {
   attachWidget(frame, window.handle);
   window.frame = frame;
   window.client = new CanvasClient(frame);
+  window.surface = createWindowSurface(window.handle);
   for (int bar : {SB_HORZ, SB_VERT}) {
     window.scrollBars[bar] = new CanvasScrollBar(bar, frame);
     window.scrollBars[bar]->hide();
@@ -369,6 +387,91 @@ int meos_qt::borderWidth(DWORD style, DWORD exStyle) {
 /* ---------------------------------------------------------------------
    Painting and scroll bars
    --------------------------------------------------------------------- */
+
+HDC BeginPaint(HWND window, PAINTSTRUCT *paint) {
+  const std::shared_ptr<Window> target = meos_qt::windowOrError(window);
+  if (!target || !paint)
+    return nullptr;
+  // Drawing is limited to the region of the WM_PAINT being handled.
+  const QRegion region = target->paintRegion;
+  const bool erase = std::exchange(target->paintErase, false);
+  const HDC dc = meos_qt::createDc(meos_qt::DeviceContext::Kind::Paint, window, target->surface, &region);
+  *paint = PAINTSTRUCT{};
+  paint->hdc = dc;
+  paint->rcPaint = meos_qt::toRECT(region.boundingRect());
+  if (erase)
+    paint->fErase = meos_qt::callWindowProc(target, WM_ERASEBKGND, reinterpret_cast<WPARAM>(dc), 0) == 0;
+  return dc;
+}
+
+BOOL EndPaint(HWND /*window*/, const PAINTSTRUCT *paint) {
+  if (paint)
+    meos_qt::releaseDc(paint->hdc, meos_qt::DeviceContext::Kind::Paint);
+  return TRUE;
+}
+
+// Any thread may draw through GetDC; the backing store's screen copy is made in
+// the GUI thread.
+HDC GetDC(HWND window) {
+  if (!window || window == GetDesktopWindow())
+    return meos_qt::createDc(meos_qt::DeviceContext::Kind::Screen, nullptr, nullptr, nullptr);
+  const std::shared_ptr<Window> target = meos_qt::windowOrError(window);
+  if (!target)
+    return nullptr;
+  return meos_qt::createDc(meos_qt::DeviceContext::Kind::Window, window, target->surface, nullptr);
+}
+
+int ReleaseDC(HWND /*window*/, HDC dc) {
+  if (meos_qt::releaseDc(dc, meos_qt::DeviceContext::Kind::Window) ||
+      meos_qt::releaseDc(dc, meos_qt::DeviceContext::Kind::Screen))
+    return 1;
+  return 0;
+}
+
+// Moves the pixels of scrollRect (default: the client area) by (dx, dy) within
+// clipRect. The uncovered area is invalidated with SW_INVALIDATE; a pending update
+// region moves along, and SW_SCROLLCHILDREN moves the child windows.
+int ScrollWindowEx(HWND window, int dx, int dy, const RECT *scrollRect, const RECT *clipRect,
+                   HRGN /*updateRegion*/, LPRECT updateRect, UINT flags) {
+  const std::shared_ptr<Window> target = meos_qt::windowOrError(window);
+  if (!target || !target->client)
+    return RGN_ERROR;
+
+  const QRect client(QPoint(0, 0), meos_qt::clientSize(*target));
+  const QRect scroll = scrollRect ? meos_qt::toQRect(*scrollRect) : client;
+  const QRect clip = clipRect ? meos_qt::toQRect(*clipRect) & client : client;
+  const QRect source = scroll & client;
+  const QRect dest = source.translated(dx, dy) & clip;
+
+  if (dx || dy) {
+    if (target->surface && !dest.isEmpty())
+      meos_qt::scrollSurface(*target->surface, dest, dx, dy);
+    const QRegion movedUpdate = (target->updateRegion & source).translated(dx, dy) & clip;
+    if (!movedUpdate.isEmpty())
+      meos_qt::invalidate(*target, movedUpdate, target->eraseRequested);
+  }
+
+  const QRegion uncovered = QRegion(scroll & clip) - QRegion(dest);
+  if (flags & SW_INVALIDATE)
+    meos_qt::invalidate(*target, uncovered, (flags & SW_ERASE) != 0);
+
+  if ((flags & SW_SCROLLCHILDREN) && (dx || dy)) {
+    const std::vector<HWND> children = target->children;
+    for (HWND handle : children) {
+      const std::shared_ptr<Window> child = meos_qt::findWindow(handle);
+      if (!child || !child->frame || (scrollRect && !meos_qt::windowRect(*child).intersects(scroll)))
+        continue;
+      child->frame->move(child->frame->pos() + QPoint(dx, dy));
+      meos_qt::reportGeometry(child);
+    }
+  }
+
+  if (updateRect)
+    *updateRect = meos_qt::toRECT(uncovered.boundingRect());
+  if (uncovered.isEmpty())
+    return NULLREGION;
+  return uncovered.rectCount() == 1 ? SIMPLEREGION : COMPLEXREGION;
+}
 
 BOOL InvalidateRect(HWND window, const RECT *rect, BOOL erase) {
   if (!window) {

@@ -30,6 +30,8 @@ class QKeyEvent;
 
 namespace meos_qt {
 
+class Surface;
+
 /* ---------------------------------------------------------------------
    Application and message loop: win32_app.cpp
    --------------------------------------------------------------------- */
@@ -87,6 +89,9 @@ public:
   // placed in client.
   QPointer<QWidget> frame;
   QPointer<QWidget> client;
+  // Backing store of the client area (win32_gdi.h). GetDC and BeginPaint draw
+  // on it, the client widget shows it. Set once when the window is created.
+  std::shared_ptr<Surface> surface;
 
   bool destroying = false;
 
