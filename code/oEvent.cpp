@@ -2058,7 +2058,7 @@ pRunner oEvent::addRunnerVacant(int classId) {
   return r;
 }
 
-pRunner oEvent::addSecondRaceEntry(pRunner src, int classId) {
+pRunner oEvent::addSecondRaceEntry(pRunner src, int classId, int courseId) {
   if (!src)
     return nullptr;
 
@@ -2101,7 +2101,7 @@ pRunner oEvent::addSecondRaceEntry(pRunner src, int classId) {
   pr->setFlag(oRunner::TransferFlags::FlagNoDatabase, true);
 
   pr->setClassId(classId > 0 ? classId : src->getClassId(false), false);
-  pr->setCourseId(0); // The course is defined by the class of the new race
+  pr->setCourseId(courseId); // courseId 0: the course is defined by the class of the new race
 
   // Share the card number with the first race. The card (oCard) itself stays with the
   // first race, which makes getRunnerByCardNo/nextNeedReadout select this entry on the

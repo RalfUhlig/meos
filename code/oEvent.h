@@ -1245,8 +1245,9 @@ public:
   /** Create an additional entry for a competitor who runs another course with the same
       card. The read card (oCard) and all result data stay with the source runner; the
       new entry only shares the card number, so that the next readout is matched to it.
-      classId == 0 keeps the class of the source runner. */
-  pRunner addSecondRaceEntry(pRunner src, int classId);
+      classId == 0 keeps the class of the source runner, courseId == 0 takes the course
+      from the class. */
+  pRunner addSecondRaceEntry(pRunner src, int classId, int courseId = 0);
 
   pRunner getRunner(int Id, int stage) const;
 
