@@ -2858,10 +2858,10 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
       // name list does not even contain a competitor that already finished. Name the
       // competitor the card number belongs to instead, and let the operator decide.
       if (!r && multipleStarts && interactiveReadout)
-        r = getRunnerForCardSplitPrint(sic);
+        r = findAdditionalRaceSource(sic);
     }
     else
-      r = getRunnerForCardSplitPrint(sic);
+      r = multipleStarts ? findAdditionalRaceSource(sic) : getRunnerForCardSplitPrint(sic);
 
     if (!r && showDatabase()) {
       //Look up in database.
@@ -2906,6 +2906,39 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
       processUnmatched(gdi, sic, !pageLoaded);
     }
   }
+}
+
+pRunner TabSI::findAdditionalRaceSource(const SICard& sic) const {
+  // The last finisher is where the split printout starts, so start there too. It settles
+  // the case of a card shared by a family, where the entries belong to different people.
+  pRunner best = getRunnerForCardSplitPrint(sic);
+  if (!best)
+    return nullptr;
+
+  wstring baseName;
+  int bestNumber = extractEntryNumber(best->getNameRaw(), baseName);
+
+  vector<pRunner> out;
+  oe->getRunnersByCardNo(sic.CardNumber, false, oEvent::CardLookupProperty::SkipNoStart, out);
+
+  for (pRunner r : out) {
+    if (!r->getCard() || r == best)
+      continue;
+
+    // Only the entries of one and the same person carry comparable numbers.
+    wstring candidateBase;
+    int number = extractEntryNumber(r->getNameRaw(), candidateBase);
+    if (candidateBase != baseName)
+      continue;
+
+    if (number > bestNumber ||
+        (number == bestNumber && best->getFinishTime() < r->getFinishTime())) {
+      best = r;
+      bestNumber = number;
+    }
+  }
+
+  return best;
 }
 
 pRunner TabSI::getRunnerForCardSplitPrint(const SICard& sic) const {

@@ -55,6 +55,11 @@ private:
 
   pRunner autoMatch(const SICard &sic, pRunner db_r);
 
+  /** The entry of the most recent race among those sharing a card number: the highest
+      entry number within one and the same name, ties broken by the latest finish time.
+      Returns nullptr when the number belongs to nobody that has been read out. */
+  pRunner findAdditionalRaceSource(const SICard &sic) const;
+
   /** processCard builds a course out of the punches when the class has none, and attaches
       it to the class -- which changes the course for everyone in that class. Refuse an
       additional race in that situation and let the operator pick a course instead. */
