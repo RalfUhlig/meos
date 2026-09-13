@@ -3150,7 +3150,17 @@ bool TabSI::processCard(gdioutput& gdi, pRunner runner, const SICard& csic, bool
 
   if (!runner->getCourse(false) && !csic.isManualInput() && !oe->getMeOSFeatures().hasFeature(MeOSFeatures::NoCourses)) {
 
-    if (pclass && !pclass->hasMultiCourse() && !pclass->hasDirectResult()) {
+    const bool classTakesACourse = pclass && !pclass->hasMultiCourse() && !pclass->hasDirectResult();
+
+    // A class without a course is a supported setup, not a gap in the configuration:
+    // evaluateCard has a course free mode that takes start and finish from the card and
+    // gives the competitor a time and status OK. Building a course out of the punches
+    // attaches it to the class and thereby changes it for everyone in that class, so do it
+    // only where MeOS is completing its own doing: a class it created during readout, or a
+    // competition that carries no courses at all.
+    const bool completeOwnSetup = pclass && (pclass->getType() == L"tmp" || oe->getNumCourses() == 0);
+
+    if (classTakesACourse && completeOwnSetup) {
       pCourse pcourse = gEvent->addCourse(pclass->getName());
       pclass->setCourse(pcourse);
 
@@ -3167,7 +3177,7 @@ bool TabSI::processCard(gdioutput& gdi, pRunner runner, const SICard& csic, bool
       else
         gdi.addStringUT(0, msg);
     }
-    else {
+    else if (!classTakesACourse) {
       if (!(pclass && pclass->hasDirectResult())) {
         const wchar_t* msg = L"Löpare saknar klass eller bana";
 
