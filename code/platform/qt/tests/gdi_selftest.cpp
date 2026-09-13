@@ -585,6 +585,29 @@ void testFontHeights() {
     DeleteObject(monoBold);
   }
 
+  // A substitute for Segoe UI takes the pixel sizes and cells Windows picks for it
+  // (cell height 14 -> em height 11 with cell 13, em height 32 -> cell 45).
+  if (meos_qt::substituteFamily(L"Segoe UI", 0) != QLatin1String("Segoe UI")) {
+    HFONT byCell = CreateFont(14, 0, 0, 0, FW_NORMAL, false, false, false, DEFAULT_CHARSET, OUT_TT_ONLY_PRECIS,
+                              CLIP_DEFAULT_PRECIS, PROOF_QUALITY, 0, L"Segoe UI");
+    HFONT byEm = CreateFont(-11, 0, 0, 0, FW_NORMAL, false, false, false, DEFAULT_CHARSET, OUT_TT_ONLY_PRECIS,
+                            CLIP_DEFAULT_PRECIS, PROOF_QUALITY, 0, L"Segoe UI");
+    HFONT large = CreateFont(-32, 0, 0, 0, FW_BOLD, false, false, false, DEFAULT_CHARSET, OUT_TT_ONLY_PRECIS,
+                             CLIP_DEFAULT_PRECIS, PROOF_QUALITY, 0, L"Segoe UI");
+    dc = GetDC(nullptr);
+    SelectObject(dc, byCell);
+    CHECK(GetTextExtentPoint32(dc, L"Hello", 5, &size) && size.cy == 13);
+    const int cellWidth = size.cx;
+    SelectObject(dc, byEm);
+    CHECK(GetTextExtentPoint32(dc, L"Hello", 5, &size) && size.cy == 13 && size.cx == cellWidth);
+    SelectObject(dc, large);
+    CHECK(GetTextExtentPoint32(dc, L"Hello", 5, &size) && size.cy == 45);
+    ReleaseDC(nullptr, dc);
+    DeleteObject(byCell);
+    DeleteObject(byEm);
+    DeleteObject(large);
+  }
+
   // Substitutes exist for the faces MeOS asks for.
   CHECK(!meos_qt::substituteFamily(L"Segoe UI", 0).isEmpty());
   CHECK(!meos_qt::substituteFamily(L"", FF_MODERN).isEmpty());

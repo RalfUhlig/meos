@@ -87,6 +87,11 @@ int main(int argc, char **argv) {
 
   std::map<std::string, Summary> summaries;
   for (const auto &[key, reference] : windows) {
+    // GetTextExtentPoint32 of the text with a line break (text 14) gave 56 and 62
+    // pixels for Arial 11 in two runs on the same Windows machine; MeOS measures
+    // line breaks only with DrawText.
+    if (key.size() > 10 && key.compare(key.size() - 10, 10, ",extent,14") == 0)
+      continue;
     const std::string face = key.substr(0, key.find(','));
     Summary &summary = summaries[face];
     summary.count++;

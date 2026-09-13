@@ -71,17 +71,44 @@ const std::map<std::wstring, std::vector<const char *>> &substitutes() {
 
 // What the substitute of a missing face takes over from the original, derived from
 // the Windows measurement (tests/gdi_metrics_windows.csv): the cell height per em
-// ((winAscent + winDescent) / unitsPerEm), and whether the face has a bold style or
-// GDI emboldens it, which widens every character by a pixel.
+// ((winAscent + winDescent) / unitsPerEm); the cell heights GDI uses for the em
+// heights from 6 pixels on, where the face picks them by its VDMX table; and whether
+// the face has a bold style or GDI emboldens it, which widens every character by a
+// pixel.
 struct OriginalFace {
   qreal cellPerEm;
+  std::vector<int> cells;
   bool hasBold;
+
+  static constexpr int firstEm = 6;
+
+  // The em height GDI picks for a cell height: the largest one whose cell fits.
+  int emForCell(int cell) const {
+    int em = 0;
+    for (std::size_t i = 0; i < cells.size() && cells[i] <= cell; i++)
+      em = firstEm + int(i);
+    if (em && cell <= cells.back())
+      return em;
+    return std::max(qRound(cell / cellPerEm), 1);
+  }
+
+  int cellForEm(int em) const {
+    if (em >= firstEm && em < firstEm + int(cells.size()))
+      return cells[std::size_t(em - firstEm)];
+    return qRound(em * cellPerEm);
+  }
 };
 
 const OriginalFace *originalFace(const std::wstring &lowerFaceName) {
   static const std::map<std::wstring, OriginalFace> faces = {
-      {L"segoe ui", {2724.0 / 2048.0, true}},
-      {L"lucida console", {1.0, false}},
+      {L"segoe ui",
+       {2724.0 / 2048.0,
+        // Em heights 6 to 60, the same for all styles.
+        {8,  10, 11, 12, 12, 13, 15, 17, 19, 20, 21, 23, 25, 25, 28, 30, 30, 31, 32,
+         35, 36, 37, 38, 40, 41, 42, 45, 45, 46, 47, 48, 50, 51, 52, 54, 55, 57, 59,
+         60, 61, 62, 62, 65, 66, 67, 68, 70, 71, 72, 74, 74, 76, 77, 78, 81},
+        true}},
+      {L"lucida console", {1.0, {}, false}},
   };
   const auto entry = faces.find(lowerFaceName);
   return entry == faces.end() ? nullptr : &entry->second;
@@ -627,8 +654,8 @@ std::shared_ptr<Font> meos_qt::createFont(const LOGFONT &logFont) {
   int ascent = 0;
   int descent = 0;
   if (original) {
-    em = std::max(height < 0 ? -height : qRound(height / original->cellPerEm), 1);
-    const int cell = height > 0 ? height : qRound(em * original->cellPerEm);
+    em = height < 0 ? -height : original->emForCell(height);
+    const int cell = original->cellForEm(em);
     ascent = qRound(cell * qreal(design.winAscent) / cellUnits);
     descent = cell - ascent;
     if (!original->hasBold && weight >= 600) {
