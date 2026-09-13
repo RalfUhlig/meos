@@ -567,6 +567,24 @@ void testFontHeights() {
   DeleteObject(em);
   DeleteObject(bold);
 
+  // A substitute for Lucida Console keeps its cell (em height = cell height), and
+  // bold is one pixel wider per character, as GDI emboldens Lucida Console.
+  if (meos_qt::substituteFamily(L"Lucida Console", 0) != QLatin1String("Lucida Console")) {
+    HFONT mono = CreateFont(14, 0, 0, 0, FW_NORMAL, false, false, false, DEFAULT_CHARSET, OUT_TT_ONLY_PRECIS,
+                            CLIP_DEFAULT_PRECIS, PROOF_QUALITY, FF_MODERN, L"Lucida Console");
+    HFONT monoBold = CreateFont(14, 0, 0, 0, FW_BOLD, false, false, false, DEFAULT_CHARSET, OUT_TT_ONLY_PRECIS,
+                                CLIP_DEFAULT_PRECIS, PROOF_QUALITY, FF_MODERN, L"Lucida Console");
+    dc = GetDC(nullptr);
+    SelectObject(dc, mono);
+    CHECK(GetTextExtentPoint32(dc, L"12:34", 5, &size) && size.cy == 14 && size.cx == 5 * textWidth(dc, L"1"));
+    const int monoWidth = size.cx;
+    SelectObject(dc, monoBold);
+    CHECK(textWidth(dc, L"12:34") == monoWidth + 5);
+    ReleaseDC(nullptr, dc);
+    DeleteObject(mono);
+    DeleteObject(monoBold);
+  }
+
   // Substitutes exist for the faces MeOS asks for.
   CHECK(!meos_qt::substituteFamily(L"Segoe UI", 0).isEmpty());
   CHECK(!meos_qt::substituteFamily(L"", FF_MODERN).isEmpty());

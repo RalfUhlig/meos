@@ -45,6 +45,11 @@ Notes:
   harmless; installing `libxkbcommon-dev` silences it.
 - All versions in the table were checked on 2026-09-11 with a CMake project that finds and links
   every package.
+- **Fonts.** MeOS asks for Windows fonts. Arial, Times New Roman and Courier New come from
+  `ttf-mscorefonts-installer` (optional; otherwise the metric compatible Liberation fonts are used).
+  Segoe UI is replaced by Selawik, which is embedded in the build (`code/platform/qt/fonts`, SIL Open
+  Font License); Lucida Console is drawn with DejaVu Sans Mono (`fonts-dejavu-core`, installed with
+  Qt) in the cell size of the original.
 
 ## System setup
 

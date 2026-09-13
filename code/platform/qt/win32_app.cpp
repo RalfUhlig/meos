@@ -10,8 +10,15 @@
 
 #include "win32_ui.h"
 
+#include <QFontDatabase>
 #include <QKeyEvent>
 #include <QThread>
+
+// Registers the fonts compiled in from fonts/meos_fonts.qrc (outside any namespace,
+// as Q_INIT_RESOURCE requires).
+static void initFontResources() {
+  Q_INIT_RESOURCE(meos_fonts);
+}
 
 namespace {
 
@@ -60,7 +67,13 @@ std::unique_ptr<QApplication> meos_qt::createApplication(int &argc, char **argv)
   // Qt loads the first font.
   if (qEnvironmentVariableIsEmpty("FREETYPE_PROPERTIES"))
     qputenv("FREETYPE_PROPERTIES", "truetype:interpreter-version=35");
-  return std::make_unique<Application>(argc, argv);
+  auto app = std::make_unique<Application>(argc, argv);
+
+  // Selawik stands in for Segoe UI, the default font of MeOS.
+  initFontResources();
+  for (const char *file : {":/meos/fonts/selawk.ttf", ":/meos/fonts/selawkb.ttf", ":/meos/fonts/selawkl.ttf"})
+    QFontDatabase::addApplicationFont(QString::fromLatin1(file));
+  return app;
 }
 
 HINSTANCE meos_qt::applicationInstance() {

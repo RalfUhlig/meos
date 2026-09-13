@@ -69,6 +69,24 @@ const std::map<std::wstring, std::vector<const char *>> &substitutes() {
   return table;
 }
 
+// What the substitute of a missing face takes over from the original, derived from
+// the Windows measurement (tests/gdi_metrics_windows.csv): the cell height per em
+// ((winAscent + winDescent) / unitsPerEm), and whether the face has a bold style or
+// GDI emboldens it, which widens every character by a pixel.
+struct OriginalFace {
+  qreal cellPerEm;
+  bool hasBold;
+};
+
+const OriginalFace *originalFace(const std::wstring &lowerFaceName) {
+  static const std::map<std::wstring, OriginalFace> faces = {
+      {L"segoe ui", {2724.0 / 2048.0, true}},
+      {L"lucida console", {1.0, false}},
+  };
+  const auto entry = faces.find(lowerFaceName);
+  return entry == faces.end() ? nullptr : &entry->second;
+}
+
 bool isInstalled(const QString &family) {
   static std::mutex mutex;
   static std::map<QString, bool> known;
@@ -597,13 +615,28 @@ std::shared_ptr<Font> meos_qt::createFont(const LOGFONT &logFont) {
   // A positive height is the cell height (ascent + descent), a negative one the
   // em height, as for GDI; zero is the default cell height. Fonts with a VDMX
   // table give the size and the cell; otherwise both follow from the OS/2 table.
+  // A substitute for a known missing face gets the cell proportions of the
+  // original, so that sizes and line heights stay those of Windows.
   const DesignMetrics design = designMetrics(font);
   const int cellUnits = design.winAscent + design.winDescent;
   const int height = logFont.lfHeight ? logFont.lfHeight : 16;
+  const std::wstring lowerFace = lowerCase(face);
+  const bool substituted = !lowerFace.empty() && lowerCase(font.family().toStdWString()) != lowerFace;
+  const OriginalFace *original = substituted ? originalFace(lowerFace) : nullptr;
   int em = 0;
   int ascent = 0;
   int descent = 0;
-  if (!lookupVdmx(design.vdmx, height, em, ascent, descent)) {
+  if (original) {
+    em = std::max(height < 0 ? -height : qRound(height / original->cellPerEm), 1);
+    const int cell = height > 0 ? height : qRound(em * original->cellPerEm);
+    ascent = qRound(cell * qreal(design.winAscent) / cellUnits);
+    descent = cell - ascent;
+    if (!original->hasBold && weight >= 600) {
+      // GDI emboldens the regular style and widens every character by a pixel.
+      font.setLetterSpacing(QFont::AbsoluteSpacing, 1);
+    }
+  }
+  else if (!lookupVdmx(design.vdmx, height, em, ascent, descent)) {
     em = height < 0 ? -height : qRound(height * design.unitsPerEm / cellUnits);
     em = std::max(em, 1);
     ascent = qRound(design.winAscent * em / design.unitsPerEm);

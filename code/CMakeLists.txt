@@ -155,7 +155,10 @@ if(NOT WIN32)
 
   # The Win32 window manager subset (USER32) on Qt 6 widgets (stage 1.2).
   find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets)
+  # Selawik, the substitute for Segoe UI (platform/qt/fonts/README.md).
+  qt_add_resources(MEOS_FONT_RESOURCES platform/qt/fonts/meos_fonts.qrc)
   add_library(meos_win32ui OBJECT
+    ${MEOS_FONT_RESOURCES}
     platform/qt/win32_app.cpp
     platform/qt/win32_canvas.cpp
     platform/qt/win32_gdi.cpp
@@ -203,7 +206,8 @@ if(NOT WIN32)
   meos_apply_settings(meos_gdi_metrics_compare)
   add_test(NAME gdi_metrics_compare
            COMMAND meos_gdi_metrics_compare "${CMAKE_CURRENT_BINARY_DIR}/gdi_metrics_linux.csv"
-                   "${CMAKE_CURRENT_SOURCE_DIR}/platform/qt/tests/gdi_metrics_windows.csv" "Arial" "Times New Roman")
+                   "${CMAKE_CURRENT_SOURCE_DIR}/platform/qt/tests/gdi_metrics_windows.csv" "Arial" "Times New Roman"
+                   "Lucida Console")
   set_tests_properties(gdi_metrics_compare PROPERTIES FIXTURES_REQUIRED gdi_metrics_csv SKIP_RETURN_CODE 77)
 
   # Compile-time checks that binary file structures keep their Windows layout.

@@ -115,6 +115,24 @@ void measureFont(FILE *out, HDC dc, const wchar_t *face, int height, const Style
   DeleteObject(font);
 }
 
+// Cell height and width of one text for every em height (negative) and cell height
+// (positive) from 6 to 60 pixels. Shows which pixel size GDI picks for a cell height,
+// which fonts with a VDMX table decide by that table.
+void measureSizes(FILE *out, HDC dc, const wchar_t *face, const Style &style) {
+  for (int size = 6; size <= 60; size++) {
+    for (int height : {-size, size}) {
+      HFONT font = CreateFont(height, 0, 0, 0, style.weight, style.italic, false, false, DEFAULT_CHARSET,
+                              OUT_TT_ONLY_PRECIS, CLIP_DEFAULT_PRECIS, PROOF_QUALITY, DEFAULT_PITCH | FF_ROMAN, face);
+      HGDIOBJ old = SelectObject(dc, font);
+      SIZE extent = {};
+      GetTextExtentPoint32(dc, texts[8], int(std::wcslen(texts[8])), &extent);
+      row(out, face, height, style.name, "sizes", 8, extent.cx, extent.cy);
+      SelectObject(dc, old);
+      DeleteObject(font);
+    }
+  }
+}
+
 } // namespace
 
 int WINAPI WinMain(HINSTANCE /*instance*/, HINSTANCE /*prevInstance*/, LPSTR commandLine, int /*showCommand*/) {
@@ -132,6 +150,8 @@ int WINAPI WinMain(HINSTANCE /*instance*/, HINSTANCE /*prevInstance*/, LPSTR com
       for (const Style &style : styles)
         measureFont(out, dc, face, height, style);
     }
+    for (const Style &style : styles)
+      measureSizes(out, dc, face, style);
 
     // The metrics EnumFontFamiliesEx reports; MeOS derives a relative scale from them.
     LOGFONT logFont = {};

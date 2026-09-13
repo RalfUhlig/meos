@@ -1,0 +1,8 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+  <qresource prefix="/meos/fonts">
+    <file>selawk.ttf</file>
+    <file>selawkb.ttf</file>
+    <file>selawkl.ttf</file>
+  </qresource>
+</RCC>
