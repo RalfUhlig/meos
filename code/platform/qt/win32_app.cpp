@@ -53,6 +53,13 @@ std::unique_ptr<QApplication> meos_qt::createApplication(int &argc, char **argv)
   // XWayland provides them.
   if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM") && !qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY"))
     qputenv("QT_QPA_PLATFORM", "xcb");
+  // GDI measures and draws text with the classic TrueType hinting, which also
+  // produced the hdmx tables of the fonts. FreeType's newer interpreter hints
+  // advance widths differently, so text would be up to 4 % wider or narrower
+  // than on Windows (measured with tests/gdi_metrics.cpp). Read by FreeType when
+  // Qt loads the first font.
+  if (qEnvironmentVariableIsEmpty("FREETYPE_PROPERTIES"))
+    qputenv("FREETYPE_PROPERTIES", "truetype:interpreter-version=35");
   return std::make_unique<Application>(argc, argv);
 }
 

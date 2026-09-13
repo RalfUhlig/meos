@@ -604,6 +604,23 @@ void testDrawTextLayout() {
   CHECK(DrawText(dc, L"a extraordinarily b", -1, &rc, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX) == 3 * h);
   CHECK(rc.right == textWidth(dc, L"extraordinarily"));
 
+  // The space at a break counts if it still fits, except for centred text
+  // (measured on Windows).
+  const int aaaSpace = textWidth(dc, L"aaa ");
+  rc = {0, 0, aaaSpace, 0};
+  CHECK(DrawText(dc, L"aaa bb", -1, &rc, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX) == 2 * h && rc.right == aaaSpace);
+  rc = {0, 0, aaaSpace - 1, 0};
+  CHECK(DrawText(dc, L"aaa bb", -1, &rc, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX) == 2 * h);
+  CHECK(rc.right == textWidth(dc, L"aaa"));
+  rc = {0, 0, aaaSpace, 0};
+  CHECK(DrawText(dc, L"aaa bb", -1, &rc, DT_CALCRECT | DT_WORDBREAK | DT_CENTER | DT_NOPREFIX) == 2 * h);
+  CHECK(rc.right == textWidth(dc, L"aaa"));
+
+  // A word wider than the rectangle widens it for all lines.
+  rc = {0, 0, 10, 0};
+  CHECK(DrawText(dc, L"abcdefghijklmnop ab cd", -1, &rc, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX) == 2 * h);
+  CHECK(rc.right == textWidth(dc, L"abcdefghijklmnop"));
+
   // Several spaces at a break are dropped.
   rc = {0, 0, textWidth(dc, L"one"), 0};
   CHECK(DrawText(dc, L"one   two", -1, &rc, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX) == 2 * h);
@@ -635,10 +652,14 @@ void testDrawTextLayout() {
   DrawText(dc, L"&File", -1, &rc, DT_CALCRECT | DT_NOPREFIX);
   CHECK(rc.right == textWidth(dc, L"&File"));
 
-  // DT_CALCRECT with DT_END_ELLIPSIS measures the whole text.
+  // DT_CALCRECT with DT_END_ELLIPSIS measures the shortened text, which keeps at
+  // least one character (measured on Windows).
   rc = {0, 0, 0, 0};
   DrawText(dc, L"Orienteering", -1, &rc, DT_CALCRECT | DT_END_ELLIPSIS);
-  CHECK(rc.right == textWidth(dc, L"Orienteering"));
+  CHECK(rc.right == textWidth(dc, L"O..."));
+  rc = {0, 0, textWidth(dc, L"Orient..."), 0};
+  DrawText(dc, L"Orienteering", -1, &rc, DT_CALCRECT | DT_END_ELLIPSIS);
+  CHECK(rc.right == textWidth(dc, L"Orient..."));
 
   ReleaseDC(nullptr, dc);
   DeleteObject(font);

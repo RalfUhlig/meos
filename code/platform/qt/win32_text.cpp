@@ -333,10 +333,11 @@ QString removePrefixes(const QString &text, int &underline) {
   return result;
 }
 
-// Breaks a paragraph between words. A line ends before the word that would pass
-// maxWidth, and the spaces at the break are dropped. A word wider than maxWidth
-// gets a line of its own and is not broken.
-void breakParagraph(const Font &font, const QString &text, int underline, int maxWidth,
+// Breaks a paragraph between words, as DrawText does: a line ends before the word
+// that would pass maxWidth. The space at the break belongs to the line if it still
+// fits (not for centred or right-aligned text); further spaces are dropped. maxWidth
+// is at least the width of the widest word (see layoutText).
+void breakParagraph(const Font &font, const QString &text, int underline, int maxWidth, bool keepSpace,
                     std::vector<TextLine> &lines) {
   const int length = int(text.size());
   auto isSpace = [&](int i) { return text[i] == QLatin1Char(' '); };
@@ -353,7 +354,6 @@ void breakParagraph(const Font &font, const QString &text, int underline, int ma
   for (;;) {
     int lineEnd = start;
     int pos = start;
-    bool hasWord = false;
     bool broken = false;
     while (pos < length) {
       int wordStart = pos;
@@ -364,11 +364,10 @@ void breakParagraph(const Font &font, const QString &text, int underline, int ma
       int wordEnd = wordStart;
       while (wordEnd < length && !isSpace(wordEnd))
         wordEnd++;
-      if (hasWord && textWidth(font, text.mid(start, wordEnd - start)) > maxWidth) {
+      if (lineEnd > start && textWidth(font, text.mid(start, wordEnd - start)) > maxWidth) {
         broken = true;
         break;
       }
-      hasWord = true;
       lineEnd = wordEnd;
       pos = wordEnd;
     }
@@ -377,6 +376,8 @@ void breakParagraph(const Font &font, const QString &text, int underline, int ma
       addLine(start, length);
       return;
     }
+    if (keepSpace && lineEnd < length && textWidth(font, text.mid(start, lineEnd + 1 - start)) <= maxWidth)
+      lineEnd++;
     addLine(start, lineEnd);
     start = lineEnd;
     while (start < length && isSpace(start))
@@ -384,27 +385,33 @@ void breakParagraph(const Font &font, const QString &text, int underline, int ma
   }
 }
 
-// Shortens a line to "..." at its end so that it fits maxWidth.
+// Shortens a line to "..." at its end so that it fits maxWidth. At least the first
+// character stays, even if the result is wider.
 void addEllipsis(const Font &font, TextLine &line, int maxWidth) {
-  if (line.width <= maxWidth)
+  if (line.width <= maxWidth || line.text.isEmpty())
     return;
   const QString dots = QStringLiteral("...");
-  for (int keep = int(line.text.size()) - 1; keep > 0; keep--) {
+  const int first = line.text[0].isHighSurrogate() && line.text.size() > 1 ? 2 : 1;
+  int keep = int(line.text.size()) - 1;
+  QString shortened;
+  int width = 0;
+  for (; keep >= first; keep--) {
     if (line.text[keep - 1].isHighSurrogate())
       continue;
-    const QString shortened = line.text.left(keep) + dots;
-    const int width = textWidth(font, shortened);
-    if (width <= maxWidth) {
-      line.text = shortened;
-      line.width = width;
-      if (line.underline >= keep)
-        line.underline = -1;
-      return;
-    }
+    shortened = line.text.left(keep) + dots;
+    width = textWidth(font, shortened);
+    if (width <= maxWidth)
+      break;
   }
-  line.text = dots;
-  line.width = textWidth(font, dots);
-  line.underline = -1;
+  if (keep < first) {
+    keep = first;
+    shortened = line.text.left(keep) + dots;
+    width = textWidth(font, shortened);
+  }
+  line.text = shortened;
+  line.width = width;
+  if (line.underline >= keep)
+    line.underline = -1;
 }
 
 std::vector<TextLine> layoutText(const Font &font, const QString &text, UINT format, int maxWidth) {
@@ -426,12 +433,30 @@ std::vector<TextLine> layoutText(const Font &font, const QString &text, UINT for
   }
 
   const bool wordBreak = (format & DT_WORDBREAK) && !(format & DT_SINGLELINE);
-  std::vector<TextLine> lines;
+  std::vector<QString> visibleParagraphs;
+  std::vector<int> underlines;
   for (const QString &paragraph : paragraphs) {
     int underline = -1;
-    const QString visible = (format & DT_NOPREFIX) ? paragraph : removePrefixes(paragraph, underline);
+    visibleParagraphs.push_back((format & DT_NOPREFIX) ? paragraph : removePrefixes(paragraph, underline));
+    underlines.push_back(underline);
+  }
+
+  // A word wider than the rectangle widens it before the lines are broken, so
+  // that the following lines may use that width as well (measured on Windows).
+  int breakWidth = maxWidth;
+  if (wordBreak) {
+    for (const QString &paragraph : visibleParagraphs) {
+      for (const QString &word : paragraph.split(QLatin1Char(' '), Qt::SkipEmptyParts))
+        breakWidth = std::max(breakWidth, textWidth(font, word));
+    }
+  }
+
+  std::vector<TextLine> lines;
+  for (std::size_t i = 0; i < visibleParagraphs.size(); i++) {
+    const QString &visible = visibleParagraphs[i];
+    const int underline = underlines[i];
     if (wordBreak) {
-      breakParagraph(font, visible, underline, maxWidth, lines);
+      breakParagraph(font, visible, underline, breakWidth, !(format & (DT_CENTER | DT_RIGHT)), lines);
     }
     else {
       TextLine line;
@@ -441,8 +466,8 @@ std::vector<TextLine> layoutText(const Font &font, const QString &text, UINT for
       lines.push_back(std::move(line));
     }
   }
-  // DT_CALCRECT measures the whole text.
-  if ((format & DT_END_ELLIPSIS) && !(format & DT_CALCRECT)) {
+  // Also with DT_CALCRECT, which then measures the shortened text.
+  if (format & DT_END_ELLIPSIS) {
     for (TextLine &line : lines)
       addEllipsis(font, line, maxWidth);
   }
@@ -683,8 +708,9 @@ int EnumFontFamiliesEx(HDC /*dc*/, LPLOGFONT logFont, FONTENUMPROC enumProc, LPA
   for (const QString &family : families) {
     if (QFontDatabase::isPrivateFamily(family))
       continue;
+    // Windows reports the metrics of an em height of 32 pixels.
     LOGFONT entry = {};
-    entry.lfHeight = 16;
+    entry.lfHeight = -32;
     entry.lfWeight = FW_NORMAL;
     const std::wstring name = family.left(LF_FACESIZE - 1).toStdWString();
     std::wcsncpy(entry.lfFaceName, name.c_str(), LF_FACESIZE - 1);
