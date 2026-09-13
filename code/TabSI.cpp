@@ -856,6 +856,14 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
       if (gdi.getData("RunnerId", rid) && rid > 0) {
         r = gEvent->getRunner(rid, 0);
 
+        if (r && r->getCard() && multipleStarts && stringMatch(r->getName(), name)) {
+          SICard copy = activeSIC;
+          gdi.restore();
+          activeSIC.clear(0);
+          startInteractive(gdi, copy, r, nullptr);
+          return 0;
+        }
+
         if (r && r->getCard()) {
           if (!askOverwriteCard(gdi, r)) {
             r = 0;
@@ -876,6 +884,15 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
 
       if (lookup) {
         r = gEvent->getRunnerByName(name, club);
+
+        if (r && r->getCard() && multipleStarts) {
+          SICard copy = activeSIC;
+          gdi.restore();
+          activeSIC.clear(0);
+          startInteractive(gdi, copy, r, nullptr);
+          return 0;
+        }
+
         if (r && r->getCard()) {
           if (!askOverwriteCard(gdi, r))
             r = 0;
@@ -2931,7 +2948,8 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     gdi.pushX();
 
     gdi.addCombo("Runners", 300, 300, SportIdentCB, L"Namn:");
-    gEvent->fillRunners(gdi, "Runners", false, oEvent::RunnerFilterOnlyNoResult);
+    gEvent->fillRunners(gdi, "Runners", false,
+                        multipleStarts ? 0 : oEvent::RunnerFilterOnlyNoResult);
 
     if (db_r) {
       gdi.setText("Runners", db_r->getName()); //Data from DB
