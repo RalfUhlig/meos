@@ -55,9 +55,10 @@ private:
 
   pRunner autoMatch(const SICard &sic, pRunner db_r);
 
-  /** Create a new, independent entry for a competitor doing another start with the
-      same card. Returns nullptr if there is no earlier runner with that card. */
-  pRunner createMultipleStartEntry(SICard &sic);
+  /** processCard builds a course out of the punches when the class has none, and attaches
+      it to the class -- which changes the course for everyone in that class. Refuse an
+      additional race in that situation and let the operator pick a course instead. */
+  bool requireCourse(gdioutput &gdi, int classId, int courseId) const;
 
   void processPunchOnly(gdioutput &gdi, const SICard &sic);
   void startInteractive(gdioutput &gdi, const SICard &sic,

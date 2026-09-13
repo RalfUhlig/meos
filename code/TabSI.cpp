@@ -1089,11 +1089,62 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
         return 0;
 
       r->setClassId(lbi.data, true);
+      if (gdi.hasWidget("Courses")) {
+        ListBoxInfo cbi;
+        gdi.getSelectedItem("Courses", cbi);
+        r->setCourseId(cbi.data); // 0: the course of the class
+      }
 
       gdi.restore();
       SICard copy = activeSIC;
       activeSIC.clear(&activeSIC);
       processCard(gdi, r, copy);
+    }
+    else if (bi.id == "AdditionalRace") {
+      // Another race for the competitor the card number belongs to. The existing result
+      // stays with the first entry; only the card number is shared, which is what makes
+      // the next readout find the new entry.
+      ListBoxInfo lbi;
+      gdi.getSelectedItem("Classes", lbi);
+
+      if (lbi.data == 0 || lbi.data == -1) {
+        gdi.alert("Du måste välja en klass");
+        return 0;
+      }
+
+      int courseId = 0;
+      if (gdi.hasWidget("Courses")) {
+        ListBoxInfo cbi;
+        gdi.getSelectedItem("Courses", cbi);
+        courseId = cbi.data;
+      }
+
+      if (!requireCourse(gdi, lbi.data, courseId))
+        return 0;
+
+      DWORD rid;
+      if (!gdi.getData("RunnerId", rid) || rid == 0)
+        return 0;
+
+      pRunner src = gEvent->getRunner(rid, 0);
+      if (!src)
+        return 0;
+
+      pRunner r = oe->addSecondRaceEntry(src, lbi.data, courseId);
+      if (!r)
+        return 0;
+
+      gdi.restore();
+      SICard copy = activeSIC;
+      activeSIC.clear(&activeSIC);
+      processCard(gdi, r, copy); // On the new entry, not on src
+    }
+    else if (bi.id == "OtherRunner") {
+      // The card number pointed at the wrong person. Back to selecting one by name.
+      SICard copy = activeSIC;
+      gdi.restore();
+      activeSIC.clear(0);
+      startInteractive(gdi, copy, nullptr, nullptr);
     }
     else if (bi.id == "EntryOK") {
       storedInfo.clear();
@@ -1467,6 +1518,13 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
           gdi.setText("Club", r->getClub());
         gdi.setText("FindMatch", lang.tl("Press Enter to continue"), true);
       }
+    }
+    else if (bi.id == "Classes" && gdi.hasWidget("Courses")) {
+      // Default the course back to the course of the class whenever the newly selected
+      // class has one. A class without a course keeps whatever was picked.
+      pClass pc = oe->getClass(bi.data);
+      if (pc && pc->getCourse())
+        gdi.selectItemByData("Courses", 0);
     }
     else if (bi.id == "PayMode") {
       updateEntryInfo(gdi);
@@ -2658,9 +2716,6 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
   pRunner r;
   if (sic.runnerId == 0) {
     r = oe->getRunnerByCardNo(sic.CardNumber, 0, oEvent::CardLookupProperty::ForReadout);
-
-    if (!r && multipleStarts && !oe->isCardRead(sic))
-      r = createMultipleStartEntry(sic);
   }
   else {
     r = gEvent->getRunner(sic.runnerId, 0);
@@ -2777,8 +2832,17 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
 
   pRunner db_r = 0;
   if (sic.runnerId == 0) {
-    if (!readBefore)
+    if (!readBefore) {
       r = gEvent->getRunnerByCardNo(sic.CardNumber, 0, oEvent::CardLookupProperty::ForReadout);
+
+      // A genuine additional race carries new punches, so the card does not count as read
+      // before, and every entry with that number already holds a card: nextNeedReadout
+      // returns nothing and the card would land in the dialog for unmatched cards, whose
+      // name list does not even contain a competitor that already finished. Name the
+      // competitor the card number belongs to instead, and let the operator decide.
+      if (!r && multipleStarts && interactiveReadout)
+        r = getRunnerForCardSplitPrint(sic);
+    }
     else
       r = getRunnerForCardSplitPrint(sic);
 
@@ -2825,23 +2889,6 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
       processUnmatched(gdi, sic, !pageLoaded);
     }
   }
-}
-
-pRunner TabSI::createMultipleStartEntry(SICard &sic) {
-  // Convert punch times to relative times.
-  oe->convertTimes(nullptr, sic);
-  pRunner rOld = oe->getRunnerByCardNo(sic.CardNumber, sic.getFirstTime(),
-                                       oEvent::CardLookupProperty::Any);
-  if (!rOld)
-    return nullptr;
-
-  vector<pClass> classes;
-  oe->findBestClass(sic, classes);
-  int classId = rOld->getClassId(false);
-  if (classes.size() == 1)
-    classId = classes[0]->getId();
-
-  return oe->addSecondRaceEntry(rOld, classId);
 }
 
 pRunner TabSI::getRunnerForCardSplitPrint(const SICard& sic) const {
@@ -2967,12 +3014,34 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     gdi.dropLine();
     gdi.addString("", 1, bf);
 
+    if (hasResult) {
+      // Spell out who was found and what they already ran. A card number alone is a weak
+      // identity: a rental card handed out a second time makes every lookup point at the
+      // previous borrower, and that is only visible if the existing result is shown.
+      wstring info = r->getCompleteIdentification(oRunner::IDType::OnlyThis);
+      if (!r->getClass(true).empty())
+        info += L", " + r->getClass(true);
+      info += L" - " + r->getStatusS(false, true);
+      const wstring &rt = r->getRunningTimeS(true, SubSecond::Auto);
+      if (!rt.empty())
+        info += L", " + rt;
+
+      gdi.addStringUT(0, info);
+
+      if (oe->isHiredCard(sic.CardNumber))
+        gdi.addString("", 0, "Hyrbricka. Kontrollera att resultatet tillhör den visade deltagaren").setColor(colorRed);
+    }
+
+    // An additional race is only offered when the operator has declared that competitors
+    // may start several times. Nothing is ever created without this dialog.
+    const bool offerAdditional = hasResult && multipleStarts;
+
+    gdi.dropLine();
     gdi.fillRight();
     gdi.pushX();
 
-    gdi.addSelection("Classes", 200, 300, 0, L"Klass:");
+    gdi.addSelection("Classes", 200, 300, SportIdentCB, L"Klass:");
     gEvent->fillClasses(gdi, "Classes", {}, oEvent::extraNone, oEvent::filterNone);
-    gdi.setInputFocus("Classes");
 
     if (r->getClassId(false)) {
       // The runner has a class. Do not overrule it by a guess from the card.
@@ -2986,15 +3055,42 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
         gdi.selectItemByData("Classes", classes[0]->getId());
     }
 
-    gdi.dropLine();
+    if (hasResult && !oe->getMeOSFeatures().withoutCourses(*oe)) {
+      // Built like the course selection on the runner tab. Course 0 means the course of
+      // the class, which is the default whenever the selected class has one.
+      gdi.addSelection("Courses", 200, 300, 0, L"Bana:");
+      oe->fillCourses(gdi, "Courses", { make_pair(L"X", 0) }, true);
+      gdi.modifyItemDescription("Courses", 0, lang.tl("[Klassens bana]"));
+      gdi.selectItemByData("Courses", r->getCourseId());
+    }
 
-    if (hasResult) {
+    gdi.setInputFocus("Classes");
+
+    // The buttons go on a row of their own at the left margin: with up to four of them
+    // next to two selections the usual side by side layout would run off the page.
+    // getHeight is the bottom of what was just drawn, which a dropLine count cannot know.
+    gdi.popX();
+    gdi.setCY(gdi.getHeight() + gdi.scaleLength(8));
+
+    if (offerAdditional) {
+      gdi.addButton("AdditionalRace", L"Nytt lopp för deltagaren", SportIdentCB,
+                    L"Skapa en ny anmälan för ytterligare ett lopp. Det tidigare resultatet behålls").setDefault();
+      gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB);
+    }
+    else if (hasResult) {
       // Reading the card replaces the existing result, but askOverwriteCard
       // guards the click.
       gdi.addButton("OK4", L"Skriv över resultatet", SportIdentCB).setDefault();
     }
     else {
       gdi.addButton("OK4", "OK", SportIdentCB).setDefault();
+    }
+
+    if (hasResult) {
+      // The card number need not identify the person standing here: a rental card can have
+      // been handed out again, and a family card belongs to several people by design.
+      gdi.addButton("OtherRunner", L"Annan deltagare", SportIdentCB,
+                    L"Brickan tillhör någon annan. Välj deltagare");
     }
 
     // An escape from this dialog. Historically it was only reached for a runner
@@ -3926,6 +4022,23 @@ bool TabSI::autoAssignClass(pRunner r, const SICard& sic) {
   }
 
   return r && r->getClassId(false) != 0;
+}
+
+bool TabSI::requireCourse(gdioutput &gdi, int classId, int courseId) const {
+  if (courseId != 0)
+    return true; // A course was picked for this race
+
+  if (oe->getMeOSFeatures().withoutCourses(*oe))
+    return true; // The competition is run without courses
+
+  pClass pc = oe->getClass(classId);
+  if (pc && (pc->getCourse() || pc->hasMultiCourse() || pc->hasCoursePool()))
+    return true; // The class supplies a course
+
+  // Letting processCard continue here would make it build a course out of the punches and
+  // attach it to the class, silently changing the course for everyone in that class.
+  gdi.alert("Klassen saknar bana. Välj en bana för loppet");
+  return false;
 }
 
 void TabSI::showManualInput(gdioutput& gdi) {
