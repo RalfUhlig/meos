@@ -743,3 +743,35 @@ BOOL AlphaBlend(HDC dst, int x, int y, int width, int height, HDC src, int srcX,
   });
   return TRUE;
 }
+
+/* ---------------------------------------------------------------------
+   Bitmaps in controls
+   --------------------------------------------------------------------- */
+
+// A bitmap whose alpha channel is zero throughout (a 24-bit image in a 32-bit
+// DIB) is opaque, as the image lists and buttons of Windows treat it.
+QPixmap meos_qt::bitmapPixmap(HBITMAP bitmap) {
+  const std::shared_ptr<Bitmap> object = findGdiObject<Bitmap>(bitmap, GdiType::Bitmap);
+  if (!object || !object->surface)
+    return QPixmap();
+  QImage image;
+  {
+    std::lock_guard<std::mutex> lock(object->surface->mutex);
+    image = object->surface->image.copy();
+  }
+  if (image.hasAlphaChannel()) {
+    bool anyAlpha = false;
+    for (int y = 0; y < image.height() && !anyAlpha; y++) {
+      const auto *line = reinterpret_cast<const QRgb *>(image.constScanLine(y));
+      for (int x = 0; x < image.width(); x++) {
+        if (qAlpha(line[x]) != 0) {
+          anyAlpha = true;
+          break;
+        }
+      }
+    }
+    if (!anyAlpha)
+      image = image.convertToFormat(QImage::Format_RGB32);
+  }
+  return QPixmap::fromImage(image);
+}

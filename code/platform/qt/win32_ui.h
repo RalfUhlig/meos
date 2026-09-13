@@ -19,6 +19,8 @@
 
 // Qt first: the Win32 headers define many short macros.
 #include <QApplication>
+#include <QCursor>
+#include <QPixmap>
 #include <QPointer>
 #include <QRegion>
 #include <QScrollBar>
@@ -26,11 +28,16 @@
 
 #include "windows.h"
 
+#include <functional>
+
+class QHelpEvent;
 class QKeyEvent;
+class QMouseEvent;
 
 namespace meos_qt {
 
 class Surface;
+class Window;
 
 /* ---------------------------------------------------------------------
    Application and message loop: win32_app.cpp
@@ -58,6 +65,18 @@ struct WindowClass {
   HINSTANCE instance = nullptr;
   HCURSOR cursor = nullptr;
   HBRUSH background = nullptr;
+  // Creates the widgets of a window of a system class (a control). Windows of
+  // registered classes get a canvas.
+  void (*createWidgets)(Window &window, QWidget *parentWidget) = nullptr;
+};
+
+// The state of a control (win32_controls.cpp, win32_commctrl.cpp).
+class Control {
+public:
+  virtual ~Control() = default;
+  // The height a control takes for a requested window height. A combo box keeps
+  // the height of its selection field.
+  virtual int windowHeight(int requested) const { return requested; }
 };
 
 struct ScrollBarState {
@@ -92,6 +111,8 @@ public:
   // Backing store of the client area (win32_gdi.h). GetDC and BeginPaint draw
   // on it, the client widget shows it. Set once when the window is created.
   std::shared_ptr<Surface> surface;
+  // Set for controls; their client widget is the Qt control.
+  std::shared_ptr<Control> control;
 
   bool destroying = false;
 
@@ -140,6 +161,46 @@ void reportGeometry(const std::shared_ptr<Window> &window, UINT extraFlags = 0);
 
 // Destroys all remaining windows without messages, as at process exit.
 void destroyAllWindows();
+
+// Sends WM_COMMAND with a notification code to the parent of a control.
+void notifyParent(const Window &control, int code);
+
+/* Keyboard focus. The layer keeps the focus window itself and sends
+   WM_KILLFOCUS and WM_SETFOCUS as Windows does; the Qt focus widget follows it. */
+
+// Qt moves its focus widget (user click, window activation); called from
+// QApplication::notify for focus events.
+void qtFocusEvent(QWidget *receiver, bool focusIn, Qt::FocusReason reason);
+
+// Suppresses qtFocusEvent while the layer hides, disables or focuses widgets, and
+// afterwards gives the Qt focus to the focus window.
+class QtFocusGuard {
+public:
+  QtFocusGuard();
+  ~QtFocusGuard();
+  QtFocusGuard(const QtFocusGuard &) = delete;
+  QtFocusGuard &operator=(const QtFocusGuard &) = delete;
+};
+
+// While a window has the mouse capture, mouse input over other windows goes to
+// it. Returns true if the event was redirected.
+bool redirectMouseToCapture(QWidget *receiver, QMouseEvent *event);
+
+/* ---------------------------------------------------------------------
+   Controls: win32_controls.cpp (BUTTON, EDIT, COMBOBOX, LISTBOX, STATIC)
+   and win32_commctrl.cpp (tooltips, toolbar)
+   --------------------------------------------------------------------- */
+
+// The system window classes, registered with the first window class lookup.
+void registerControlClasses(const std::function<void(const WindowClass &)> &add);
+void registerCommonControlClasses(const std::function<void(const WindowClass &)> &add);
+
+// Shows the text of a tool of a tooltip window for a QEvent::ToolTip. Returns true
+// if the event concerns a window of this layer.
+bool showToolTip(QWidget *receiver, QHelpEvent *event);
+
+// The pixmap of a bitmap handle (BM_SETIMAGE, image lists), or a null pixmap.
+QPixmap bitmapPixmap(HBITMAP bitmap);
 
 /* ---------------------------------------------------------------------
    Messages, timers, hooks and keyboard state: win32_message.cpp
@@ -205,6 +266,9 @@ WPARAM mouseKeyFlags(Qt::MouseButtons buttons, Qt::KeyboardModifiers modifiers);
    Canvas: win32_canvas.cpp. The widgets of windows of registered classes.
    --------------------------------------------------------------------- */
 
+// Creates the frame widget of a window, which draws the border of child windows.
+QWidget *createFrame(Window &window, QWidget *parentWidget);
+
 // Creates frame, client area and scroll bars. parentWidget is the client area of
 // the parent (child windows), the frame of the owner or nullptr.
 void createCanvas(Window &window, QWidget *parentWidget);
@@ -225,5 +289,13 @@ void invalidate(Window &window, const QRegion &region, bool erase);
 int borderWidth(DWORD style, DWORD exStyle);
 
 constexpr int scrollBarExtent = 17; // SM_CXVSCROLL at 96 DPI
+
+/* ---------------------------------------------------------------------
+   Cursors: win32_screen.cpp
+   --------------------------------------------------------------------- */
+
+// Sets the cursor of a class (WM_SETCURSOR default processing) on the widget
+// the mouse is over.
+void setClassCursor(const Window &window, QWidget *widget);
 
 } // namespace meos_qt

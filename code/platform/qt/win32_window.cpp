@@ -11,6 +11,7 @@
 #include "win32_gdi.h"
 
 #include <QGuiApplication>
+#include <QMouseEvent>
 #include <QScreen>
 
 #include <map>
@@ -39,6 +40,11 @@ ATOM lastAtom = 0xC000;
 
 HWND captureWindow = nullptr;
 
+// The keyboard focus (GUI thread). qtFocusGuardDepth > 0 while the layer itself
+// changes Qt's focus widget.
+HWND focusWindow = nullptr;
+int qtFocusGuardDepth = 0;
+
 std::wstring lowerCase(const std::wstring &text) {
   std::wstring lower(text);
   for (wchar_t &ch : lower)
@@ -46,8 +52,26 @@ std::wstring lowerCase(const std::wstring &text) {
   return lower;
 }
 
+// tableMutex must be held.
+void addClass(const WindowClass &windowClass) {
+  auto entry = std::make_shared<WindowClass>(windowClass);
+  entry->atom = ++lastAtom;
+  classes[lowerCase(entry->name)] = entry;
+}
+
+// The system classes (controls) exist from the start, as on Windows.
+void registerSystemClasses() {
+  static bool registered = false;
+  if (registered)
+    return;
+  registered = true;
+  meos_qt::registerControlClasses(addClass);
+  meos_qt::registerCommonControlClasses(addClass);
+}
+
 std::shared_ptr<const WindowClass> findClass(LPCWSTR name) {
   std::lock_guard<std::mutex> lock(tableMutex);
+  registerSystemClasses();
   if (IS_INTRESOURCE(name)) {
     const ATOM atom = static_cast<ATOM>(reinterpret_cast<std::uintptr_t>(name));
     for (const auto &entry : classes) {
@@ -134,6 +158,8 @@ void resizeWindow(Window &window, int width, int height) {
     return;
   width = std::max(width, 0);
   height = std::max(height, 0);
+  if (window.control)
+    height = window.control->windowHeight(height);
   if (!window.isChild() && frame->isWindow()) {
     const QSize decoration = frame->frameGeometry().size() - frame->size();
     width = std::max(width - decoration.width(), 0);
@@ -156,6 +182,9 @@ void releaseWindow(const std::shared_ptr<Window> &window, bool root) {
   meos_qt::killTimersOf(window->handle);
   if (captureWindow == window->handle)
     captureWindow = nullptr;
+  // Without messages, as Windows releases the focus of a destroyed window.
+  if (focusWindow == window->handle)
+    focusWindow = nullptr;
   unregisterWindow(window->handle);
 
   if (std::shared_ptr<Window> parent = meos_qt::findWindow(window->parent)) {
@@ -184,8 +213,13 @@ void destroyTree(const std::shared_ptr<Window> &window, bool root) {
       destroyTree(owned, true);
   }
 
-  if (root && window->frame)
+  if (root && window->frame) {
+    // A visible child window is hidden first, which moves the focus to its parent.
+    if (window->isChild() && (window->style & WS_VISIBLE) && focusWindow == window->handle)
+      SetFocus(window->parent);
+    meos_qt::QtFocusGuard guard;
     window->frame->hide();
+  }
 
   meos_qt::callWindowProc(window, WM_DESTROY, 0, 0);
 
@@ -303,6 +337,13 @@ void meos_qt::reportGeometry(const std::shared_ptr<Window> &window, UINT extraFl
   callWindowProc(window, WM_WINDOWPOSCHANGED, 0, reinterpret_cast<LPARAM>(&pos));
 }
 
+void meos_qt::notifyParent(const Window &control, int code) {
+  if (!control.isChild())
+    return;
+  if (const std::shared_ptr<Window> parent = findWindow(control.parent))
+    callWindowProc(parent, WM_COMMAND, MAKEWPARAM(WORD(control.id), WORD(code)), reinterpret_cast<LPARAM>(control.handle));
+}
+
 void meos_qt::destroyAllWindows() {
   const std::vector<std::shared_ptr<Window>> remaining = allWindows();
   for (const std::shared_ptr<Window> &window : remaining) {
@@ -318,6 +359,7 @@ void meos_qt::destroyAllWindows() {
   std::lock_guard<std::mutex> lock(tableMutex);
   windows.clear();
   captureWindow = nullptr;
+  focusWindow = nullptr;
 }
 
 /* ---------------------------------------------------------------------
@@ -341,6 +383,7 @@ ATOM RegisterClassEx(const WNDCLASSEX *windowClass) {
   entry->background = windowClass->hbrBackground;
 
   std::lock_guard<std::mutex> lock(tableMutex);
+  registerSystemClasses();
   const std::wstring key = lowerCase(entry->name);
   if (classes.count(key)) {
     SetLastError(ERROR_CLASS_ALREADY_EXISTS);
@@ -392,7 +435,10 @@ HWND CreateWindowEx(DWORD exStyle, LPCWSTR className, LPCWSTR windowName, DWORD 
   QWidget *parentWidget = nullptr;
   if (parentWindow)
     parentWidget = window->isChild() ? parentWindow->client.data() : parentWindow->frame.data();
-  meos_qt::createCanvas(*window, parentWidget);
+  if (windowClass->createWidgets)
+    windowClass->createWidgets(*window, parentWidget);
+  else
+    meos_qt::createCanvas(*window, parentWidget);
   if (!window->isChild())
     window->frame->setWindowTitle(QString::fromWCharArray(window->text.c_str(), int(window->text.size())));
 
@@ -648,10 +694,15 @@ BOOL ShowWindow(HWND window, int command) {
   const bool topLevel = !target->isChild();
 
   switch (command) {
-  case SW_HIDE:
+  case SW_HIDE: {
+    // The focus goes to the parent of a hidden child window.
+    if (focusWindow == window)
+      SetFocus(target->isChild() ? target->parent : nullptr);
     target->style &= ~WS_VISIBLE;
+    meos_qt::QtFocusGuard guard;
     frame->hide();
     break;
+  }
   case SW_MAXIMIZE:
     target->style |= WS_VISIBLE;
     if (topLevel)
@@ -701,6 +752,10 @@ BOOL EnableWindow(HWND window, BOOL enable) {
     target->style &= ~WS_DISABLED;
   else
     target->style |= WS_DISABLED;
+  // A disabled window cannot have the focus.
+  if (!enable && focusWindow == window)
+    SetFocus(nullptr);
+  meos_qt::QtFocusGuard guard;
   if (target->frame)
     target->frame->setEnabled(enable != FALSE);
   return wasDisabled ? TRUE : FALSE;
@@ -840,22 +895,151 @@ HWND SetActiveWindow(HWND window) {
   return previous;
 }
 
-HWND SetFocus(HWND window) {
+namespace {
+
+// As on Windows: the focus window changes first, then WM_KILLFOCUS goes to the
+// previous window and WM_SETFOCUS to the new one, unless a handler of
+// WM_KILLFOCUS has moved the focus elsewhere.
+HWND changeFocus(HWND window) {
   const HWND previous = GetFocus();
-  if (!window) {
-    if (QWidget *focus = QApplication::focusWidget())
-      focus->clearFocus();
+  if (previous == window)
     return previous;
+  focusWindow = window;
+  if (const std::shared_ptr<Window> old = meos_qt::findWindow(previous)) {
+    meos_qt::callWindowProc(old, WM_KILLFOCUS, reinterpret_cast<WPARAM>(window), 0);
+    if (focusWindow != window)
+      return previous;
   }
-  const std::shared_ptr<Window> target = meos_qt::windowOrError(window);
-  if (!target || !target->client || (target->style & WS_DISABLED))
-    return nullptr;
-  target->client->setFocus(Qt::OtherFocusReason);
+  if (const std::shared_ptr<Window> target = meos_qt::findWindow(window))
+    meos_qt::callWindowProc(target, WM_SETFOCUS, reinterpret_cast<WPARAM>(previous), 0);
   return previous;
 }
 
+// Gives Qt's focus to the client widget of the focus window.
+void syncQtFocus() {
+  const std::shared_ptr<Window> target = meos_qt::findWindow(focusWindow);
+  QWidget *current = QApplication::focusWidget();
+  if (target && target->client && target->client->isEnabled()) {
+    if (meos_qt::windowFromWidget(current) != focusWindow)
+      target->client->setFocus(Qt::OtherFocusReason);
+  }
+  else if (current && meos_qt::windowFromWidget(current)) {
+    current->clearFocus();
+  }
+}
+
+} // namespace
+
+meos_qt::QtFocusGuard::QtFocusGuard() {
+  qtFocusGuardDepth++;
+}
+
+meos_qt::QtFocusGuard::~QtFocusGuard() {
+  if (--qtFocusGuardDepth == 0)
+    syncQtFocus();
+}
+
+void meos_qt::qtFocusEvent(QWidget *receiver, bool focusIn, Qt::FocusReason reason) {
+  // A combo box keeps the focus while its list is open.
+  if (qtFocusGuardDepth > 0 || reason == Qt::PopupFocusReason || !isGuiThread())
+    return;
+  const HWND window = windowFromWidget(receiver);
+  if (focusIn) {
+    if (window && findWindow(window)) {
+      QtFocusGuard guard;
+      changeFocus(window);
+    }
+  }
+  else if (window && window == focusWindow) {
+    // Qt has already set the new focus widget (none if the application was deactivated).
+    const HWND next = windowFromWidget(QApplication::focusWidget());
+    if (next != window) {
+      QtFocusGuard guard;
+      changeFocus(findWindow(next) ? next : nullptr);
+    }
+  }
+}
+
+bool meos_qt::redirectMouseToCapture(QWidget *receiver, QMouseEvent *event) {
+  const std::shared_ptr<Window> capture = findWindow(GetCapture());
+  if (!capture || !capture->client)
+    return false;
+  const HWND window = windowFromWidget(receiver);
+  if (!window || window == capture->handle)
+    return false;
+
+  UINT message = 0;
+  const bool doubleClicks = capture->windowClass && (capture->windowClass->style & CS_DBLCLKS);
+  switch (event->type()) {
+  case QEvent::MouseMove:
+    message = WM_MOUSEMOVE;
+    break;
+  case QEvent::MouseButtonDblClick:
+    if (event->button() == Qt::LeftButton && doubleClicks) {
+      message = WM_LBUTTONDBLCLK;
+      break;
+    }
+    [[fallthrough]];
+  case QEvent::MouseButtonPress:
+  case QEvent::MouseButtonRelease: {
+    const bool down = event->type() != QEvent::MouseButtonRelease;
+    switch (event->button()) {
+    case Qt::LeftButton: message = down ? WM_LBUTTONDOWN : WM_LBUTTONUP; break;
+    case Qt::RightButton: message = down ? WM_RBUTTONDOWN : WM_RBUTTONUP; break;
+    case Qt::MiddleButton: message = down ? WM_MBUTTONDOWN : WM_MBUTTONUP; break;
+    default: break;
+    }
+    break;
+  }
+  default:
+    break;
+  }
+  event->accept();
+  if (message) {
+    const QPoint position = capture->client->mapFromGlobal(event->globalPosition().toPoint());
+    callWindowProc(capture, message, mouseKeyFlags(event->buttons(), event->modifiers()),
+                   MAKELPARAM(position.x(), position.y()));
+  }
+  return true;
+}
+
+HWND SetFocus(HWND window) {
+  if (!meos_qt::isGuiThread())
+    return nullptr;
+  if (!window) {
+    meos_qt::QtFocusGuard guard;
+    return changeFocus(nullptr);
+  }
+  const std::shared_ptr<Window> target = meos_qt::windowOrError(window);
+  if (!target)
+    return nullptr;
+  if (window == GetFocus())
+    return window;
+
+  // Neither the window nor one of its parents may be disabled. The top-level
+  // window is activated.
+  std::shared_ptr<Window> top = target;
+  for (;;) {
+    if (top->style & WS_DISABLED)
+      return nullptr;
+    if (!top->isChild())
+      break;
+    std::shared_ptr<Window> parent = meos_qt::findWindow(top->parent);
+    if (!parent)
+      return nullptr;
+    top = parent;
+  }
+  if (top->frame && top->frame->isVisible() && !top->frame->isActiveWindow())
+    top->frame->activateWindow();
+
+  meos_qt::QtFocusGuard guard;
+  return changeFocus(window);
+}
+
 HWND GetFocus() {
-  return meos_qt::windowFromWidget(QApplication::focusWidget());
+  if (focusWindow && !meos_qt::findWindow(focusWindow))
+    focusWindow = nullptr;
+  return focusWindow;
 }
 
 // Qt only reports mouse movement outside a widget while a button is held. The

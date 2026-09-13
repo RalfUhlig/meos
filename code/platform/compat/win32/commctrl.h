@@ -1,7 +1,8 @@
 // Linux port: stand-in for the Windows SDK header <commctrl.h>.
 // The common controls MeOS uses (tooltips, the table toolbar, image lists) are
-// implemented by the Qt backend in code/platform/qt/win32_commctrl.cpp (stage 1.2,
-// not yet available). Constants have their Windows values.
+// implemented by the Qt backend in code/platform/qt/win32_commctrl.cpp (stage 1.2).
+// The tab control follows with meos.cpp (stage 1.3). Constants have their Windows
+// values.
 
 #pragma once
 
@@ -23,6 +24,7 @@ void InitCommonControls();
 #define TTF_IDISHWND 0x0001
 #define TTF_SUBCLASS 0x0010
 
+#define TTM_RELAYEVENT      (WM_USER + 7)
 #define TTM_SETMAXTIPWIDTH  (WM_USER + 24)
 #define TTM_ADDTOOLW        (WM_USER + 50)
 #define TTM_DELTOOLW        (WM_USER + 51)
@@ -52,6 +54,7 @@ typedef struct _IMAGELIST *HIMAGELIST;
 #define ILC_MASK    0x00000001
 #define ILC_COLOR24 0x00000018
 
+#define CLR_NONE    0xFFFFFFFF
 #define CLR_DEFAULT 0xFF000000
 
 HIMAGELIST ImageList_Create(int cx, int cy, UINT flags, int initial, int grow);

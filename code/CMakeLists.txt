@@ -161,6 +161,8 @@ if(NOT WIN32)
     ${MEOS_FONT_RESOURCES}
     platform/qt/win32_app.cpp
     platform/qt/win32_canvas.cpp
+    platform/qt/win32_commctrl.cpp
+    platform/qt/win32_controls.cpp
     platform/qt/win32_gdi.cpp
     platform/qt/win32_message.cpp
     platform/qt/win32_screen.cpp
@@ -186,6 +188,12 @@ if(NOT WIN32)
   target_link_libraries(meos_win32ui_selftest PRIVATE meos_win32ui meos_platform Qt6::Widgets)
   add_test(NAME win32ui_selftest COMMAND meos_win32ui_selftest)
   set_tests_properties(win32ui_selftest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_executable(meos_controls_selftest platform/qt/tests/controls_selftest.cpp)
+  meos_apply_settings(meos_controls_selftest)
+  target_link_libraries(meos_controls_selftest PRIVATE meos_win32ui meos_platform Qt6::Widgets)
+  add_test(NAME controls_selftest COMMAND meos_controls_selftest)
+  set_tests_properties(controls_selftest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
   add_executable(meos_gdi_selftest platform/qt/tests/gdi_selftest.cpp)
   meos_apply_settings(meos_gdi_selftest)

@@ -11,7 +11,11 @@
 #include "win32_ui.h"
 
 #include <QFontDatabase>
+#include <QHelpEvent>
 #include <QKeyEvent>
+#include <QMouseEvent>
+#include <QPalette>
+#include <QStyleFactory>
 #include <QThread>
 
 // Registers the fonts compiled in from fonts/meos_fonts.qrc (outside any namespace,
@@ -37,17 +41,72 @@ public:
   // here and not in an application event filter, which Qt calls again for each
   // parent a key event propagates to.
   bool notify(QObject *receiver, QEvent *event) override {
-    const QEvent::Type type = event->type();
-    if ((type == QEvent::KeyPress || type == QEvent::KeyRelease) && receiver->isWidgetType()) {
+    if (!receiver->isWidgetType())
+      return QApplication::notify(receiver, event);
+    const auto widget = static_cast<QWidget *>(receiver);
+
+    switch (event->type()) {
+    case QEvent::KeyPress:
+    case QEvent::KeyRelease: {
       const QKeyEvent &key = static_cast<const QKeyEvent &>(*event);
       meos_qt::KeyEventScope scope(key);
       if (meos_qt::filterKeyEvent(key))
         return true;
       return QApplication::notify(receiver, event);
     }
-    return QApplication::notify(receiver, event);
+    // The layer keeps the focus window and sends WM_KILLFOCUS/WM_SETFOCUS.
+    case QEvent::FocusIn:
+    case QEvent::FocusOut: {
+      const bool result = QApplication::notify(receiver, event);
+      const auto &focus = static_cast<const QFocusEvent &>(*event);
+      meos_qt::qtFocusEvent(widget, event->type() == QEvent::FocusIn, focus.reason());
+      return result;
+    }
+    case QEvent::MouseMove:
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseButtonRelease:
+    case QEvent::MouseButtonDblClick:
+      if (meos_qt::redirectMouseToCapture(widget, static_cast<QMouseEvent *>(event)))
+        return true;
+      return QApplication::notify(receiver, event);
+    case QEvent::ToolTip:
+      if (meos_qt::showToolTip(widget, static_cast<QHelpEvent *>(event)))
+        return true;
+      return QApplication::notify(receiver, event);
+    default:
+      return QApplication::notify(receiver, event);
+    }
   }
 };
+
+// Qt colours from the Windows 10 system colours (see GetSysColor), so that the
+// controls do not follow a dark desktop theme either.
+QPalette windowsPalette() {
+  const auto color = [](int index) { return QColor(GetRValue(GetSysColor(index)), GetGValue(GetSysColor(index)),
+                                                   GetBValue(GetSysColor(index))); };
+  QPalette palette;
+  for (QPalette::ColorGroup group : {QPalette::Active, QPalette::Inactive, QPalette::Disabled}) {
+    const bool disabled = group == QPalette::Disabled;
+    palette.setColor(group, QPalette::Window, color(COLOR_3DFACE));
+    palette.setColor(group, QPalette::WindowText, color(disabled ? COLOR_GRAYTEXT : COLOR_WINDOWTEXT));
+    palette.setColor(group, QPalette::Base, color(disabled ? COLOR_3DFACE : COLOR_WINDOW));
+    palette.setColor(group, QPalette::AlternateBase, color(COLOR_WINDOW));
+    palette.setColor(group, QPalette::Text, color(disabled ? COLOR_GRAYTEXT : COLOR_WINDOWTEXT));
+    palette.setColor(group, QPalette::Button, color(COLOR_3DFACE));
+    palette.setColor(group, QPalette::ButtonText, color(disabled ? COLOR_GRAYTEXT : COLOR_BTNTEXT));
+    palette.setColor(group, QPalette::Highlight, color(COLOR_HIGHLIGHT));
+    palette.setColor(group, QPalette::HighlightedText, color(COLOR_HIGHLIGHTTEXT));
+    palette.setColor(group, QPalette::ToolTipBase, color(COLOR_INFOBK));
+    palette.setColor(group, QPalette::ToolTipText, color(COLOR_INFOTEXT));
+    palette.setColor(group, QPalette::Light, color(COLOR_3DHIGHLIGHT));
+    palette.setColor(group, QPalette::Midlight, color(COLOR_3DLIGHT));
+    palette.setColor(group, QPalette::Mid, color(COLOR_3DSHADOW));
+    palette.setColor(group, QPalette::Dark, color(COLOR_3DSHADOW));
+    palette.setColor(group, QPalette::Shadow, color(COLOR_3DDKSHADOW));
+    palette.setColor(group, QPalette::Link, color(COLOR_HOTLIGHT));
+  }
+  return palette;
+}
 
 // WM_QUIT is not queued; GetMessage returns it once the queue is empty.
 bool quitPosted = false;
@@ -68,6 +127,11 @@ std::unique_ptr<QApplication> meos_qt::createApplication(int &argc, char **argv)
   if (qEnvironmentVariableIsEmpty("FREETYPE_PROPERTIES"))
     qputenv("FREETYPE_PROPERTIES", "truetype:interpreter-version=35");
   auto app = std::make_unique<Application>(argc, argv);
+
+  // MeOS places controls by its own measures; a desktop style with larger
+  // margins would make them overlap.
+  QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+  QApplication::setPalette(windowsPalette());
 
   // Selawik stands in for Segoe UI, the default font of MeOS.
   initFontResources();

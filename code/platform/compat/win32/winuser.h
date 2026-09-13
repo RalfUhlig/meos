@@ -115,6 +115,7 @@ typedef struct tagTPMPARAMS *LPTPMPARAMS;
    --------------------------------------------------------------------- */
 #define MAKEWPARAM(low, high) ((WPARAM)(DWORD)MAKELONG(low, high))
 #define MAKELPARAM(low, high) ((LPARAM)(DWORD)MAKELONG(low, high))
+#define MAKELRESULT(low, high) ((LRESULT)(DWORD)MAKELONG(low, high))
 
 /* ---------------------------------------------------------------------
    Messages
@@ -123,6 +124,8 @@ typedef struct tagTPMPARAMS *LPTPMPARAMS;
 #define WM_DESTROY           0x0002
 #define WM_SIZE              0x0005
 #define WM_ACTIVATE          0x0006
+#define WM_SETFOCUS          0x0007
+#define WM_KILLFOCUS         0x0008
 #define WM_SETREDRAW         0x000B
 #define WM_PAINT             0x000F
 #define WM_CLOSE             0x0010
@@ -132,6 +135,7 @@ typedef struct tagTPMPARAMS *LPTPMPARAMS;
 #define WM_QUIT              0x0012
 #define WM_ERASEBKGND        0x0014
 #define WM_SETFONT           0x0030
+#define WM_GETFONT           0x0031
 #define WM_WINDOWPOSCHANGED  0x0047
 #define WM_NCACTIVATE        0x0086
 #define WM_KEYDOWN           0x0100
@@ -384,6 +388,7 @@ int ScrollWindowEx(HWND window, int dx, int dy, const RECT *scrollRect, const RE
 #define BS_DEFPUSHBUTTON 0x00000001
 #define BS_CHECKBOX      0x00000002
 #define BS_AUTOCHECKBOX  0x00000003
+#define BS_TYPEMASK      0x0000000F
 #define BS_BITMAP        0x00000080
 #define BS_PUSHLIKE      0x00001000
 #define BS_MULTILINE     0x00002000
@@ -391,6 +396,7 @@ int ScrollWindowEx(HWND window, int dx, int dy, const RECT *scrollRect, const RE
 
 #define BM_GETCHECK 0x00F0
 #define BM_SETCHECK 0x00F1
+#define BM_GETIMAGE 0x00F6
 #define BM_SETIMAGE 0x00F7
 
 #define BST_UNCHECKED 0x0000
@@ -406,6 +412,7 @@ int ScrollWindowEx(HWND window, int dx, int dy, const RECT *scrollRect, const RE
 #define ES_AUTOVSCROLL 0x0040
 #define ES_AUTOHSCROLL 0x0080
 
+#define EM_GETSEL          0x00B0
 #define EM_SETSEL          0x00B1
 #define EM_REPLACESEL      0x00C2
 #define EM_LIMITTEXT       0x00C5
@@ -427,6 +434,7 @@ int ScrollWindowEx(HWND window, int dx, int dy, const RECT *scrollRect, const RE
 #define CB_GETCOUNT      0x0146
 #define CB_GETCURSEL     0x0147
 #define CB_GETLBTEXT     0x0148
+#define CB_GETLBTEXTLEN  0x0149
 #define CB_INSERTSTRING  0x014A
 #define CB_RESETCONTENT  0x014B
 #define CB_FINDSTRING    0x014C
@@ -447,6 +455,7 @@ int ScrollWindowEx(HWND window, int dx, int dy, const RECT *scrollRect, const RE
 
 #define LB_ERR (-1)
 
+#define LB_ADDSTRING     0x0180
 #define LB_INSERTSTRING  0x0181
 #define LB_DELETESTRING  0x0182
 #define LB_RESETCONTENT  0x0184
@@ -455,6 +464,7 @@ int ScrollWindowEx(HWND window, int dx, int dy, const RECT *scrollRect, const RE
 #define LB_GETSEL        0x0187
 #define LB_GETCURSEL     0x0188
 #define LB_GETTEXT       0x0189
+#define LB_GETTEXTLEN    0x018A
 #define LB_GETCOUNT      0x018B
 #define LB_GETTOPINDEX   0x018E
 #define LB_FINDSTRING    0x018F
@@ -534,10 +544,11 @@ UINT RegisterClipboardFormat(LPCWSTR formatName);
 
 /* ---------------------------------------------------------------------
    Cursors, bitmaps, system metrics and colours, monitors:
-   code/platform/qt/win32_screen.cpp. Only GetSysColor is implemented so far;
-   the rest follows in step 1.2.5.
+   code/platform/qt/win32_screen.cpp. GetSysColor and the cursors are implemented
+   so far; the rest follows in step 1.2.5.
    --------------------------------------------------------------------- */
 #define IDC_ARROW MAKEINTRESOURCE(32512)
+#define IDC_IBEAM MAKEINTRESOURCE(32513)
 #define IDC_WAIT  MAKEINTRESOURCE(32514)
 #define IDC_HAND  MAKEINTRESOURCE(32649)
 
@@ -550,12 +561,21 @@ UINT RegisterClipboardFormat(LPCWSTR formatName);
 
 #define COLOR_ACTIVECAPTION 2
 #define COLOR_WINDOW        5
+#define COLOR_WINDOWFRAME   6
+#define COLOR_WINDOWTEXT    8
+#define COLOR_HIGHLIGHT     13
+#define COLOR_HIGHLIGHTTEXT 14
 #define COLOR_3DFACE        15
 #define COLOR_BTNFACE       15
+#define COLOR_3DSHADOW      16
 #define COLOR_GRAYTEXT      17
+#define COLOR_BTNTEXT       18
 #define COLOR_3DHIGHLIGHT   20
+#define COLOR_3DDKSHADOW    21
+#define COLOR_3DLIGHT       22
 #define COLOR_INFOTEXT      23
 #define COLOR_INFOBK        24
+#define COLOR_HOTLIGHT      26
 
 HCURSOR LoadCursor(HINSTANCE instance, LPCWSTR cursorName);
 HCURSOR SetCursor(HCURSOR cursor);

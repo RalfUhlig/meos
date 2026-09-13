@@ -131,7 +131,12 @@ protected:
     meos_qt::copySurfaceToScreen(*surface, painter, event->region());
   }
 
-  void mouseMoveEvent(QMouseEvent *event) override { sendMouse(this, event, WM_MOUSEMOVE); }
+  void mouseMoveEvent(QMouseEvent *event) override {
+    // WM_SETCURSOR precedes WM_MOUSEMOVE; its default processing sets the class cursor.
+    if (const std::shared_ptr<Window> window = windowOf(this))
+      meos_qt::setClassCursor(*window, this);
+    sendMouse(this, event, WM_MOUSEMOVE);
+  }
 
   void mousePressEvent(QMouseEvent *event) override {
     if (const UINT message = buttonMessage(event->button(), true))
@@ -157,6 +162,9 @@ protected:
   void keyPressEvent(QKeyEvent *event) override { sendKey(this, event); }
   void keyReleaseEvent(QKeyEvent *event) override { sendKey(this, event); }
 
+  // Windows moves the focus with the Tab key only in dialogs.
+  bool focusNextPrevChild(bool) override { return false; }
+
   void leaveEvent(QEvent *event) override {
     QWidget::leaveEvent(event);
     const std::shared_ptr<Window> window = windowOf(this);
@@ -175,6 +183,31 @@ public:
   explicit CanvasFrame(QWidget *parent) : QWidget(parent) {}
 
 protected:
+  // The border of a child window (the non-client area), drawn as the classic
+  // sunken edge. Appearance with visual styles follows in step 1.2.7.
+  void paintEvent(QPaintEvent *) override {
+    const std::shared_ptr<Window> window = windowOf(this);
+    if (!window || !window->isChild())
+      return;
+    QRect r = rect();
+    QPainter painter(this);
+    const auto edge = [&](int topLeftColor, int bottomRightColor) {
+      painter.fillRect(r.left(), r.top(), r.width(), 1, meos_qt::toQColor(GetSysColor(topLeftColor)));
+      painter.fillRect(r.left(), r.top(), 1, r.height(), meos_qt::toQColor(GetSysColor(topLeftColor)));
+      painter.fillRect(r.left(), r.bottom(), r.width(), 1, meos_qt::toQColor(GetSysColor(bottomRightColor)));
+      painter.fillRect(r.right(), r.top(), 1, r.height(), meos_qt::toQColor(GetSysColor(bottomRightColor)));
+      r.adjust(1, 1, -1, -1);
+    };
+    if (window->exStyle & WS_EX_CLIENTEDGE) {
+      edge(COLOR_3DSHADOW, COLOR_3DHIGHLIGHT);
+      edge(COLOR_3DDKSHADOW, COLOR_3DLIGHT);
+    }
+    if (window->style & WS_BORDER)
+      edge(COLOR_WINDOWFRAME, COLOR_WINDOWFRAME);
+  }
+
+  bool focusNextPrevChild(bool) override { return false; }
+
   void resizeEvent(QResizeEvent *event) override {
     QWidget::resizeEvent(event);
     if (const std::shared_ptr<Window> window = windowOf(this)) {
@@ -297,10 +330,15 @@ void showScrollPosition(Window &window, int bar) {
    Internal interface
    --------------------------------------------------------------------- */
 
-void meos_qt::createCanvas(Window &window, QWidget *parentWidget) {
+QWidget *meos_qt::createFrame(Window &window, QWidget *parentWidget) {
   auto *frame = new CanvasFrame(parentWidget);
   attachWidget(frame, window.handle);
   window.frame = frame;
+  return frame;
+}
+
+void meos_qt::createCanvas(Window &window, QWidget *parentWidget) {
+  QWidget *frame = createFrame(window, parentWidget);
   window.client = new CanvasClient(frame);
   window.surface = createWindowSurface(window.handle);
   for (int bar : {SB_HORZ, SB_VERT}) {
@@ -319,6 +357,11 @@ void meos_qt::layoutCanvas(Window &window) {
 
   const int border = window.isChild() ? borderWidth(window.style, window.exStyle) : 0;
   const QRect inner = frame->rect().adjusted(border, border, -border, -border);
+  if (!window.surface) {
+    // Controls draw their scroll bars themselves.
+    client->setGeometry(inner);
+    return;
+  }
   const bool vertical = (window.style & WS_VSCROLL) != 0;
   const bool horizontal = (window.style & WS_HSCROLL) != 0;
   const int width = std::max(inner.width() - (vertical ? scrollBarExtent : 0), 0);
@@ -372,6 +415,13 @@ void meos_qt::invalidate(Window &window, const QRegion &region, bool erase) {
   QWidget *client = window.client;
   if (!client)
     return;
+  if (!window.surface) {
+    // Controls paint themselves; their parts are child widgets (viewports, line edits).
+    client->update();
+    for (QWidget *part : client->findChildren<QWidget *>())
+      part->update();
+    return;
+  }
   const QRegion clipped = region.intersected(client->rect());
   if (clipped.isEmpty())
     return;
