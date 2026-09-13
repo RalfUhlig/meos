@@ -1,7 +1,7 @@
 /************************************************************************
     MeOS - Orienteering Software
-    Linux port: system colours and cursors (monitors and metrics follow in
-    step 1.2.5).
+    Linux port: system colours, cursors, system metrics, monitors and the
+    placement of windows.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -10,6 +10,9 @@
 ************************************************************************/
 
 #include "win32_ui.h"
+
+#include <QGuiApplication>
+#include <QScreen>
 
 #include <array>
 
@@ -151,4 +154,157 @@ HCURSOR SetCursor(HCURSOR cursor) {
   if (widget && meos_qt::windowFromWidget(widget) && widget->cursor().shape() != shape)
     widget->setCursor(shape);
   return previous;
+}
+
+/* ---------------------------------------------------------------------
+   System metrics and monitors
+   --------------------------------------------------------------------- */
+
+namespace {
+
+constexpr int edgeExtent = 2; // SM_CXEDGE, SM_CYEDGE
+
+QRect virtualScreen() {
+  QRect area;
+  for (const QScreen *screen : QGuiApplication::screens())
+    area |= screen->geometry();
+  return area;
+}
+
+} // namespace
+
+int GetSystemMetrics(int index) {
+  const QScreen *primary = QGuiApplication::primaryScreen();
+  const QRect screen = primary ? primary->geometry() : QRect();
+  switch (index) {
+  case SM_CXSCREEN: return screen.width();
+  case SM_CYSCREEN: return screen.height();
+  case SM_CXVIRTUALSCREEN: return virtualScreen().width();
+  case SM_CYVIRTUALSCREEN: return virtualScreen().height();
+  case SM_CXEDGE:
+  case SM_CYEDGE: return edgeExtent;
+  default: return 0;
+  }
+}
+
+// One call per screen with its rectangle in virtual screen coordinates, the primary
+// screen first. With a clip rectangle, only the screens it intersects.
+BOOL EnumDisplayMonitors(HDC dc, LPCRECT clip, MONITORENUMPROC enumProc, LPARAM data) {
+  if (dc || !enumProc) {
+    // Monitors of a DC are not needed by MeOS.
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return FALSE;
+  }
+  QList<QScreen *> screens = QGuiApplication::screens();
+  const QScreen *primary = QGuiApplication::primaryScreen();
+  std::stable_partition(screens.begin(), screens.end(), [primary](const QScreen *s) { return s == primary; });
+  for (int i = 0; i < screens.size(); i++) {
+    QRect area = screens[i]->geometry();
+    if (clip) {
+      area &= QRect(QPoint(clip->left, clip->top), QPoint(clip->right - 1, clip->bottom - 1));
+      if (area.isEmpty())
+        continue;
+    }
+    RECT rect = {area.left(), area.top(), area.left() + area.width(), area.top() + area.height()};
+    const auto monitor = reinterpret_cast<HMONITOR>(std::uintptr_t(i + 1));
+    if (!enumProc(monitor, nullptr, &rect, data))
+      break;
+  }
+  return TRUE;
+}
+
+/* ---------------------------------------------------------------------
+   Window placement
+   --------------------------------------------------------------------- */
+
+namespace {
+
+// Top-level windows without WS_EX_TOOLWINDOW report their normal position in
+// workspace coordinates, which exclude panels at the top or left of the primary
+// screen.
+QPoint workspaceOffset(const meos_qt::Window &window) {
+  if (window.isChild() || (window.exStyle & WS_EX_TOOLWINDOW))
+    return QPoint();
+  const QScreen *primary = QGuiApplication::primaryScreen();
+  return primary ? primary->availableGeometry().topLeft() - primary->geometry().topLeft() : QPoint();
+}
+
+// The window rectangle in the normal (restored) state: parent client coordinates
+// for child windows, screen coordinates for top-level windows.
+QRect normalRect(const meos_qt::Window &window) {
+  const QWidget *frame = window.frame;
+  if (!frame)
+    return QRect();
+  if (window.isChild())
+    return frame->geometry();
+  if (!frame->isMaximized() && !frame->isMinimized() && !frame->isFullScreen())
+    return frame->frameGeometry();
+  // normalGeometry excludes the decoration, which the current frame shows.
+  const QRect normal = frame->normalGeometry();
+  const QMargins decoration(frame->geometry().left() - frame->frameGeometry().left(),
+                            frame->geometry().top() - frame->frameGeometry().top(),
+                            frame->frameGeometry().right() - frame->geometry().right(),
+                            frame->frameGeometry().bottom() - frame->geometry().bottom());
+  return normal.isValid() ? normal.marginsAdded(decoration) : frame->frameGeometry();
+}
+
+} // namespace
+
+BOOL GetWindowPlacement(HWND window, WINDOWPLACEMENT *placement) {
+  const std::shared_ptr<meos_qt::Window> target = meos_qt::windowOrError(window);
+  if (!target || !placement)
+    return FALSE;
+  const QWidget *frame = target->frame;
+  placement->flags = 0;
+  placement->showCmd = SW_SHOWNORMAL;
+  if (frame && !target->isChild()) {
+    if (frame->isMinimized())
+      placement->showCmd = SW_SHOWMINIMIZED;
+    else if (frame->isMaximized())
+      placement->showCmd = SW_SHOWMAXIMIZED;
+  }
+  placement->ptMinPosition = POINT{-1, -1};
+  placement->ptMaxPosition = POINT{-1, -1};
+  const QRect rect = normalRect(*target).translated(-workspaceOffset(*target));
+  placement->rcNormalPosition = RECT{rect.left(), rect.top(), rect.left() + rect.width(), rect.top() + rect.height()};
+  return TRUE;
+}
+
+// Sets the normal position, then shows the window as showCmd says.
+BOOL SetWindowPlacement(HWND window, const WINDOWPLACEMENT *placement) {
+  const std::shared_ptr<meos_qt::Window> target = meos_qt::windowOrError(window);
+  if (!target || !placement)
+    return FALSE;
+  if (placement->length != sizeof(WINDOWPLACEMENT)) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return FALSE;
+  }
+  QWidget *frame = target->frame;
+  if (!frame)
+    return FALSE;
+
+  if (!target->isChild() && (frame->isMaximized() || frame->isMinimized()))
+    frame->showNormal();
+  const RECT &normal = placement->rcNormalPosition;
+  const QPoint offset = workspaceOffset(*target);
+  SetWindowPos(window, nullptr, normal.left + offset.x(), normal.top + offset.y(), normal.right - normal.left,
+               normal.bottom - normal.top, SWP_NOZORDER);
+
+  switch (placement->showCmd) {
+  case SW_HIDE:
+    ShowWindow(window, SW_HIDE);
+    break;
+  case SW_SHOWMINIMIZED:
+    ShowWindow(window, SW_SHOW);
+    if (!target->isChild())
+      frame->showMinimized();
+    break;
+  case SW_SHOWMAXIMIZED:
+    ShowWindow(window, SW_MAXIMIZE);
+    break;
+  default:
+    ShowWindow(window, SW_SHOWNORMAL);
+    break;
+  }
+  return TRUE;
 }

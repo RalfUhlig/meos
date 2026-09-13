@@ -13,7 +13,6 @@
 // context. Included by windows.h. Constants have their Windows values.
 //
 // Implemented by the Qt backend in code/platform/qt (stage 1.2), one file per section.
-// The printer device context is only declared so far (step 1.2.5).
 
 #pragma once
 
@@ -277,7 +276,7 @@ BOOL GetTextExtentPoint32A(HDC dc, LPCSTR text, int length, LPSIZE size);
 DWORD GetFontData(HDC dc, DWORD table, DWORD offset, LPVOID buffer, DWORD size);
 
 /* ---------------------------------------------------------------------
-   Printer device context: code/platform/qt/win32_gdi.cpp (step 1.2.5)
+   Device capabilities and the printer device context: code/platform/qt/win32_gdi.cpp.
    Until stage 3 there is no printer; CreateDC fails.
    --------------------------------------------------------------------- */
 #define HORZSIZE        4

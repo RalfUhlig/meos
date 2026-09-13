@@ -1,8 +1,8 @@
 // Linux port: stand-in for the Windows SDK header <commdlg.h>.
 // The common dialogs MeOS uses (open/save file, colour, print setup) are implemented
-// by the Qt backend in code/platform/qt/win32_dialogs.cpp (stage 1.2, not yet
-// available). Until stage 3 there is no printer: PrintDlg and PageSetupDlg fail
-// without an extended error, as on a system without printers.
+// by the Qt backend in code/platform/qt/win32_dialogs.cpp. Until stage 3 there is no
+// printer: PrintDlg and PageSetupDlg fail with PDERR_NODEFAULTPRN, as on a Windows
+// system without printers.
 // The spelling "CommDlg.h" used by some sources is resolved by the case alias
 // headers generated in code/CMakeLists.txt, not by a second file here.
 
@@ -16,6 +16,11 @@ typedef UINT_PTR (CALLBACK *LPPRINTHOOKPROC)(HWND, UINT, WPARAM, LPARAM);
 typedef UINT_PTR (CALLBACK *LPSETUPHOOKPROC)(HWND, UINT, WPARAM, LPARAM);
 typedef UINT_PTR (CALLBACK *LPPAGESETUPHOOK)(HWND, UINT, WPARAM, LPARAM);
 typedef UINT_PTR (CALLBACK *LPPAGEPAINTHOOK)(HWND, UINT, WPARAM, LPARAM);
+
+#define CDERR_STRUCTSIZE     0x0001
+#define CDERR_INITIALIZATION 0x0002
+#define PDERR_NODEFAULTPRN   0x1008
+#define FNERR_BUFFERTOOSMALL 0x3003
 
 DWORD CommDlgExtendedError();
 

@@ -67,6 +67,7 @@ void registerSystemClasses() {
   registered = true;
   meos_qt::registerControlClasses(addClass);
   meos_qt::registerCommonControlClasses(addClass);
+  meos_qt::registerDialogClasses(addClass);
 }
 
 std::shared_ptr<const WindowClass> findClass(LPCWSTR name) {

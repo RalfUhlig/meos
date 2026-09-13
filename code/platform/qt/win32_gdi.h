@@ -174,6 +174,9 @@ std::shared_ptr<T> findGdiObject(HGDIOBJ handle, GdiType type) {
   return object && object->type == type ? std::static_pointer_cast<T>(object) : nullptr;
 }
 
+// A bitmap handle for an image (LoadBitmap).
+HBITMAP createBitmap(QImage image);
+
 inline std::shared_ptr<DeviceContext> findDc(HDC dc) {
   return findGdiObject<DeviceContext>(static_cast<HGDIOBJ>(dc), GdiType::DeviceContext);
 }

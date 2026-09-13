@@ -426,6 +426,15 @@ BOOL GetExitCodeThread(HANDLE thread, LPDWORD exitCode);
 #define MAKEINTRESOURCE(id) ((LPWSTR)(std::uintptr_t)((WORD)(id)))
 #define IS_INTRESOURCE(p)   (((std::uintptr_t)(p) >> 16) == 0)
 
+#define ERROR_MOD_NOT_FOUND           126
+#define ERROR_RESOURCE_TYPE_NOT_FOUND 1813
+#define ERROR_RESOURCE_NAME_NOT_FOUND 1814
+
+#define RT_BITMAP     MAKEINTRESOURCE(2)
+#define RT_RCDATA     MAKEINTRESOURCE(10)
+#define RT_GROUP_ICON MAKEINTRESOURCE(14)
+#define RT_HTML       MAKEINTRESOURCE(23)
+
 HMODULE GetModuleHandle(LPCWSTR moduleName);
 HRSRC FindResource(HMODULE module, LPCWSTR name, LPCWSTR type);
 HGLOBAL LoadResource(HMODULE module, HRSRC resource);

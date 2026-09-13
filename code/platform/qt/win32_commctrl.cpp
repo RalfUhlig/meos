@@ -50,12 +50,6 @@ HIMAGELIST registerImageList(std::shared_ptr<ImageList> list) {
   return handle;
 }
 
-// The bitmap resources of the application. Resources are embedded in step 1.2.5;
-// until then no bitmap is found, as for a missing resource on Windows.
-QImage bitmapResource(HINSTANCE /*instance*/, LPCWSTR /*name*/) {
-  return QImage();
-}
-
 // Splits a bitmap strip into images of the given width. The mask colour becomes
 // transparent; CLR_DEFAULT takes the colour of the top left pixel.
 void addStrip(ImageList &list, QImage strip, COLORREF mask) {
@@ -414,7 +408,7 @@ HIMAGELIST ImageList_LoadImage(HINSTANCE instance, LPCWSTR bitmap, int cx, int /
                                UINT /*flags*/) {
   if (type != IMAGE_BITMAP || cx <= 0)
     return nullptr;
-  const QImage strip = bitmapResource(instance, bitmap);
+  const QImage strip = meos_qt::bitmapResource(instance, bitmap);
   if (strip.isNull())
     return nullptr;
   auto list = std::make_shared<ImageList>();

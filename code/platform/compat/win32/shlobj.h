@@ -1,6 +1,6 @@
 // Linux port: stand-in for the Windows SDK header <shlobj.h>.
 // The folder browser (SHBrowseForFolder) is implemented by the Qt backend in
-// code/platform/qt/win32_dialogs.cpp (stage 1.2, not yet available). An item ID list
+// code/platform/qt/win32_dialogs.cpp. An item ID list
 // is opaque to MeOS: it is only passed to SHGetPathFromIDList and freed through the
 // task allocator from SHGetMalloc.
 

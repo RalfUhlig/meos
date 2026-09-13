@@ -12,10 +12,13 @@
 #include "win32_gdi.h"
 
 #include <QCoreApplication>
+#include <QGuiApplication>
 #include <QMetaObject>
 #include <QPolygon>
+#include <QScreen>
 
 #include <array>
+#include <cmath>
 #include <unordered_map>
 #include <utility>
 
@@ -742,6 +745,107 @@ BOOL AlphaBlend(HDC dst, int x, int y, int width, int height, HDC src, int srcX,
     painter.drawImage(QRectF(destRect), pixels);
   });
   return TRUE;
+}
+
+HBITMAP meos_qt::createBitmap(QImage image) {
+  if (image.isNull())
+    return nullptr;
+  return static_cast<HBITMAP>(
+      registerGdiObject(std::make_shared<Bitmap>(std::make_shared<Surface>(std::move(image), nullptr))));
+}
+
+/* ---------------------------------------------------------------------
+   Device capabilities and the printer device context. There is no printer
+   until stage 3: CreateDC fails, and the page functions fail for every DC.
+   --------------------------------------------------------------------- */
+
+namespace {
+
+constexpr int mapModeText = 1; // MM_TEXT
+constexpr int spError = -1;    // SP_ERROR
+
+std::shared_ptr<DeviceContext> dcOrError(HDC dc) {
+  std::shared_ptr<DeviceContext> context = meos_qt::findDc(dc);
+  if (!context)
+    SetLastError(ERROR_INVALID_HANDLE);
+  return context;
+}
+
+} // namespace
+
+HDC CreateDC(LPCWSTR /*driver*/, LPCWSTR /*device*/, LPCWSTR /*port*/, const DEVMODE * /*initData*/) {
+  SetLastError(ERROR_INVALID_PARAMETER);
+  return nullptr;
+}
+
+// The capabilities of a display DC at 96 DPI. Displays have no physical page.
+int GetDeviceCaps(HDC dc, int index) {
+  const std::shared_ptr<DeviceContext> context = dcOrError(dc);
+  if (!context)
+    return 0;
+  QSize size;
+  if (context->surface) {
+    std::lock_guard<std::mutex> lock(context->surface->mutex);
+    size = context->surface->rect().size();
+  }
+  else if (const QScreen *screen = QGuiApplication::primaryScreen()) {
+    size = screen->geometry().size();
+  }
+  switch (index) {
+  case HORZRES: return size.width();
+  case VERTRES: return size.height();
+  case HORZSIZE: return int(std::lround(size.width() * 25.4 / 96));
+  case VERTSIZE: return int(std::lround(size.height() * 25.4 / 96));
+  default: return 0;
+  }
+}
+
+// Only MM_TEXT, the mode of all DCs MeOS draws on outside printing.
+int SetMapMode(HDC dc, int mode) {
+  if (!dcOrError(dc))
+    return 0;
+  if (mode != mapModeText) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return 0;
+  }
+  return mapModeText;
+}
+
+// In MM_TEXT the extents have no effect, and GDI ignores them.
+BOOL SetWindowExtEx(HDC dc, int /*x*/, int /*y*/, LPSIZE previous) {
+  if (!dcOrError(dc))
+    return FALSE;
+  if (previous)
+    *previous = SIZE{1, 1};
+  return TRUE;
+}
+
+BOOL SetViewportExtEx(HDC dc, int /*x*/, int /*y*/, LPSIZE previous) {
+  if (!dcOrError(dc))
+    return FALSE;
+  if (previous)
+    *previous = SIZE{1, 1};
+  return TRUE;
+}
+
+int StartDoc(HDC /*dc*/, const DOCINFO * /*docInfo*/) {
+  SetLastError(ERROR_INVALID_HANDLE);
+  return spError;
+}
+
+int EndDoc(HDC /*dc*/) {
+  SetLastError(ERROR_INVALID_HANDLE);
+  return spError;
+}
+
+int StartPage(HDC /*dc*/) {
+  SetLastError(ERROR_INVALID_HANDLE);
+  return spError;
+}
+
+int EndPage(HDC /*dc*/) {
+  SetLastError(ERROR_INVALID_HANDLE);
+  return spError;
 }
 
 /* ---------------------------------------------------------------------

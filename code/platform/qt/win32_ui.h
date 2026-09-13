@@ -23,6 +23,7 @@
 #include <QPixmap>
 #include <QPointer>
 #include <QRegion>
+#include <QStringList>
 #include <QScrollBar>
 #include <QWidget>
 
@@ -201,6 +202,29 @@ bool showToolTip(QWidget *receiver, QHelpEvent *event);
 
 // The pixmap of a bitmap handle (BM_SETIMAGE, image lists), or a null pixmap.
 QPixmap bitmapPixmap(HBITMAP bitmap);
+
+/* ---------------------------------------------------------------------
+   Dialogs, menus and the shell: win32_dialogs.cpp
+   --------------------------------------------------------------------- */
+
+// The dialog class (#32770) of message boxes.
+void registerDialogClasses(const std::function<void(const WindowClass &)> &add);
+
+// The dialog manager (IsDialogMessage): Enter, Escape, Tab and the arrow keys in a
+// dialog. Called for key presses after the keyboard hooks; returns true if the key
+// was handled.
+bool dialogKeyEvent(QWidget *receiver, const QKeyEvent &event);
+
+// A file dialog filter of OPENFILENAME (pairs of null-terminated strings, ended by
+// an empty string) as Qt name filters: "Text files (*.txt *.csv)".
+QStringList fileDialogFilters(LPCWSTR filter);
+
+/* ---------------------------------------------------------------------
+   Resources: win32_resources.cpp
+   --------------------------------------------------------------------- */
+
+// The image of a bitmap resource of the application, or a null image.
+QImage bitmapResource(HINSTANCE instance, LPCWSTR name);
 
 /* ---------------------------------------------------------------------
    Messages, timers, hooks and keyboard state: win32_message.cpp

@@ -107,6 +107,12 @@ typedef struct tagWINDOWPOS {
   UINT flags;
 } WINDOWPOS, *LPWINDOWPOS;
 
+// lParam of the WH_CBT hook with HCBT_ACTIVATE.
+typedef struct tagCBTACTIVATESTRUCT {
+  BOOL fMouse;
+  HWND hWndActive;
+} CBTACTIVATESTRUCT, *LPCBTACTIVATESTRUCT;
+
 struct tagTPMPARAMS;
 typedef struct tagTPMPARAMS *LPTPMPARAMS;
 
@@ -216,11 +222,13 @@ void PostQuitMessage(int exitCode);
 #define GWL_EXSTYLE    (-20)
 #define GWLP_USERDATA  (-21)
 
-#define SW_HIDE       0
-#define SW_SHOWNORMAL 1
-#define SW_NORMAL     1
-#define SW_MAXIMIZE   3
-#define SW_SHOW       5
+#define SW_HIDE          0
+#define SW_SHOWNORMAL    1
+#define SW_NORMAL        1
+#define SW_SHOWMINIMIZED 2
+#define SW_SHOWMAXIMIZED 3
+#define SW_MAXIMIZE      3
+#define SW_SHOW          5
 
 #define HWND_TOP     ((HWND)0)
 #define HWND_TOPMOST ((HWND)-1)
@@ -501,6 +509,9 @@ int DrawText(HDC dc, LPCWSTR text, int length, LPRECT rect, UINT format);
 #define MB_OKCANCEL          0x00000001
 #define MB_YESNOCANCEL       0x00000003
 #define MB_YESNO             0x00000004
+#define MB_ICONHAND          0x00000010
+#define MB_ICONERROR         0x00000010
+#define MB_ICONSTOP          0x00000010
 #define MB_ICONQUESTION      0x00000020
 #define MB_ICONEXCLAMATION   0x00000030
 #define MB_ICONWARNING       0x00000030
@@ -532,6 +543,8 @@ BOOL DestroyMenu(HMENU menu);
 /* ---------------------------------------------------------------------
    Clipboard: code/platform/qt/win32_clipboard.cpp
    --------------------------------------------------------------------- */
+#define ERROR_CLIPBOARD_NOT_OPEN 1418
+
 #define CF_TEXT        1
 #define CF_UNICODETEXT 13
 
@@ -543,9 +556,8 @@ HANDLE GetClipboardData(UINT format);
 UINT RegisterClipboardFormat(LPCWSTR formatName);
 
 /* ---------------------------------------------------------------------
-   Cursors, bitmaps, system metrics and colours, monitors:
-   code/platform/qt/win32_screen.cpp. GetSysColor and the cursors are implemented
-   so far; the rest follows in step 1.2.5.
+   Cursors, system metrics and colours, window placement, monitors:
+   code/platform/qt/win32_screen.cpp. LoadBitmap: win32_resources.cpp.
    --------------------------------------------------------------------- */
 #define IDC_ARROW MAKEINTRESOURCE(32512)
 #define IDC_IBEAM MAKEINTRESOURCE(32513)

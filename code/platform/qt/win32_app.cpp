@@ -50,7 +50,7 @@ public:
     case QEvent::KeyRelease: {
       const QKeyEvent &key = static_cast<const QKeyEvent &>(*event);
       meos_qt::KeyEventScope scope(key);
-      if (meos_qt::filterKeyEvent(key))
+      if (meos_qt::filterKeyEvent(key) || meos_qt::dialogKeyEvent(widget, key))
         return true;
       return QApplication::notify(receiver, event);
     }

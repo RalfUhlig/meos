@@ -12,6 +12,7 @@ include(CaseAliases)
 include(CheckCXXCompilerFlag)
 include(CheckIPOSupported)
 include(VcxprojSync)
+include(Win32Resources)
 
 option(MEOS_SANITIZE "Build Debug configurations with AddressSanitizer and UBSan (GCC/Clang)" ON)
 
@@ -161,10 +162,13 @@ if(NOT WIN32)
     ${MEOS_FONT_RESOURCES}
     platform/qt/win32_app.cpp
     platform/qt/win32_canvas.cpp
+    platform/qt/win32_clipboard.cpp
     platform/qt/win32_commctrl.cpp
     platform/qt/win32_controls.cpp
+    platform/qt/win32_dialogs.cpp
     platform/qt/win32_gdi.cpp
     platform/qt/win32_message.cpp
+    platform/qt/win32_resources.cpp
     platform/qt/win32_screen.cpp
     platform/qt/win32_text.cpp
     platform/qt/win32_window.cpp)
@@ -172,6 +176,16 @@ if(NOT WIN32)
   target_link_libraries(meos_win32ui PUBLIC meos_platform Qt6::Widgets)
 
   # main() for programs that define WinMain.
+  # The resources of meos.rc and meoslang.rc (images, language tables, sounds), found
+  # by FindResource. Uncompressed, so that LockResource points into the program image.
+  meos_generate_win32_resources("${CMAKE_CURRENT_BINARY_DIR}/meos_resources.qrc"
+    RC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/meos.rc" "${CMAKE_CURRENT_SOURCE_DIR}/meoslang.rc"
+    HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/resource.h")
+  qt_add_resources(MEOS_WIN32_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/meos_resources.qrc" OPTIONS --no-compress)
+  add_library(meos_resources OBJECT ${MEOS_WIN32_RESOURCES})
+  meos_apply_settings(meos_resources)
+  target_link_libraries(meos_resources PUBLIC Qt6::Core)
+
   add_library(meos_win32ui_main OBJECT platform/qt/win32_main.cpp)
   meos_apply_settings(meos_win32ui_main)
   target_link_libraries(meos_win32ui_main PUBLIC Qt6::Widgets)
@@ -200,6 +214,13 @@ if(NOT WIN32)
   target_link_libraries(meos_gdi_selftest PRIVATE meos_win32ui meos_platform Qt6::Widgets)
   add_test(NAME gdi_selftest COMMAND meos_gdi_selftest)
   set_tests_properties(gdi_selftest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+  add_executable(meos_dialogs_selftest platform/qt/tests/dialogs_selftest.cpp)
+  meos_apply_settings(meos_dialogs_selftest)
+  target_link_libraries(meos_dialogs_selftest PRIVATE meos_win32ui meos_resources meos_platform Qt6::Widgets)
+  add_test(NAME dialogs_selftest COMMAND meos_dialogs_selftest "${CMAKE_CURRENT_SOURCE_DIR}")
+  # Modal dialogs that do not close would hang the test.
+  set_tests_properties(dialogs_selftest PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120)
 
   # Text metrics of the Qt backend, compared with those of Windows GDI once
   # gdi_metrics_windows.csv has been created on Windows (see gdi_metrics.cpp).

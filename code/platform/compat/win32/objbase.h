@@ -1,8 +1,7 @@
 // Linux port: stand-in for the Windows SDK header <objbase.h>.
 // MeOS uses COM only for the folder browser and its task allocator. There is no COM on
 // Linux; CoInitializeEx does nothing and the interfaces declare just the methods MeOS
-// calls. Implemented in code/platform/qt/win32_dialogs.cpp (stage 1.2, not yet
-// available).
+// calls. Implemented in code/platform/qt/win32_dialogs.cpp.
 
 #pragma once
 
