@@ -60,11 +60,6 @@ private:
       Returns nullptr when the number belongs to nobody that has been read out. */
   pRunner findAdditionalRaceSource(const SICard &sic) const;
 
-  /** processCard builds a course out of the punches when the class has none, and attaches
-      it to the class -- which changes the course for everyone in that class. Refuse an
-      additional race in that situation and let the operator pick a course instead. */
-  bool requireCourse(gdioutput &gdi, int classId, int courseId) const;
-
   void processPunchOnly(gdioutput &gdi, const SICard &sic);
   void startInteractive(gdioutput &gdi, const SICard &sic,
                         pRunner r, pRunner db_r);

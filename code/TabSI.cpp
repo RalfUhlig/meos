@@ -1136,9 +1136,6 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
         courseId = cbi.data;
       }
 
-      if (!requireCourse(gdi, lbi.data, courseId))
-        return 0;
-
       DWORD rid;
       if (!gdi.getData("RunnerId", rid) || rid == 0)
         return 0;
@@ -4073,23 +4070,6 @@ bool TabSI::autoAssignClass(pRunner r, const SICard& sic) {
   }
 
   return r && r->getClassId(false) != 0;
-}
-
-bool TabSI::requireCourse(gdioutput &gdi, int classId, int courseId) const {
-  if (courseId != 0)
-    return true; // A course was picked for this race
-
-  if (oe->getMeOSFeatures().withoutCourses(*oe))
-    return true; // The competition is run without courses
-
-  pClass pc = oe->getClass(classId);
-  if (pc && (pc->getCourse() || pc->hasMultiCourse() || pc->hasCoursePool()))
-    return true; // The class supplies a course
-
-  // Letting processCard continue here would make it build a course out of the punches and
-  // attach it to the class, silently changing the course for everyone in that class.
-  gdi.alert("Klassen saknar bana. Välj en bana för loppet");
-  return false;
 }
 
 void TabSI::showManualInput(gdioutput& gdi) {
