@@ -190,6 +190,8 @@ class InfoBaseCompetitor : public InfoBase {
     virtual ~InfoBaseCompetitor() = default;
 };
 
+class InfoCompetition;
+
 class InfoCompetitor : public InfoBaseCompetitor {
   protected:
     vector<RadioTime> radioTimes;

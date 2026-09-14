@@ -65,7 +65,7 @@ protected:
 
   static map<wstring, wstring> manualCompactNameMap;
   
-  static const int dataSize = 768;
+  static const int dataSize = 768 * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
   BYTE oData[dataSize];
   BYTE oDataOld[dataSize];

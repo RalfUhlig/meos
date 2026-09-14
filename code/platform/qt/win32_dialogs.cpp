@@ -26,6 +26,7 @@
 #include <QMenu>
 #include <QProcess>
 #include <QScreen>
+#include <QStandardPaths>
 #include <QStyle>
 #include <QThread>
 #include <QUrl>
@@ -652,6 +653,34 @@ BOOL SHGetPathFromIDList(LPCITEMIDLIST idList, LPWSTR path) {
     return FALSE;
   }
   std::wmemcpy(path, idList->path.c_str(), idList->path.size() + 1);
+  return TRUE;
+}
+
+BOOL SHGetSpecialFolderPath(HWND /*owner*/, LPWSTR path, int folder, BOOL create) {
+  if (!path)
+    return FALSE;
+  path[0] = 0;
+  QStandardPaths::StandardLocation location;
+  switch (folder) {
+    case CSIDL_APPDATA:
+      location = QStandardPaths::GenericDataLocation;
+      break;
+    case CSIDL_PERSONAL:
+      location = QStandardPaths::DocumentsLocation;
+      break;
+    case CSIDL_DESKTOPDIRECTORY:
+      location = QStandardPaths::DesktopLocation;
+      break;
+    default:
+      return FALSE;
+  }
+  const QString folderPath = QStandardPaths::writableLocation(location);
+  if (folderPath.isEmpty() || (!QDir(folderPath).exists() && !(create && QDir().mkpath(folderPath))))
+    return FALSE;
+  const std::wstring wide = QDir::cleanPath(folderPath).toStdWString();
+  if (wide.size() + 1 > MAX_PATH)
+    return FALSE;
+  std::wmemcpy(path, wide.c_str(), wide.size() + 1);
   return TRUE;
 }
 

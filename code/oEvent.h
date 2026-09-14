@@ -355,7 +355,7 @@ protected:
   void updateFreeId();
   void updateFreeId(oBase *ob);
 
-  mutable SortOrder CurrentSortOrder;
+  mutable SortOrder CurrentSortOrder = SortByName;
 
   list<CompetitionInfo> cinfo;
   list<BackupInfo> backupInfo;
@@ -401,7 +401,7 @@ protected:
   set<int> timelineClasses;
   set<int> modifiedClasses;
 
-  static const int dataSize = 1024;
+  static const int dataSize = 1024 * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
   BYTE oData[dataSize];
   BYTE oDataOld[dataSize];

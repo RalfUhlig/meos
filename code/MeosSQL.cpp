@@ -1328,7 +1328,7 @@ OpFailStatus MeosSQL::SyncRead(oEvent *oe) {
       oe->Date = fromUTF(string(row["Date"]));
       oe->ZeroTime = row["ZeroTime"];
       oe->currentNameId = fromUTF(string(row["NameId"]));
-      oe->sqlUpdated = row["Modified"];
+      oe->sqlUpdated = string(row["Modified"]);
       oe->counter = row["Counter"];
 
       if (checkOldVersion(oe, row)) {
@@ -1582,7 +1582,7 @@ OpFailStatus MeosSQL::SyncRead(oEvent *oe) {
     else
       cnt = query.store("SELECT DATE_FORMAT(NOW(),'%Y-%m-%d %H:%i:%s')");
 
-    dateTime = cnt.at(0).at(0);
+    dateTime = string(cnt.at(0).at(0));
 
     oe->runnerDB->prepareLoadFromServer(nRunnerDB, nClubDB);
 
@@ -1668,7 +1668,7 @@ void MeosSQL::storeClub(const RowWrapper &row, oClub &c)
 {
   string n = row["Name"];
   
-  c.sqlUpdated = row["Modified"];
+  c.sqlUpdated = string(row["Modified"]);
   c.counter = row["Counter"];
   c.Removed = row["Removed"];
 
@@ -1686,7 +1686,7 @@ void MeosSQL::storeControl(const RowWrapper &row, oControl &c)
   oControl::ControlStatus oldStat = c.Status;
   c.Status = oControl::ControlStatus(int(row["Status"]));
 
-  c.sqlUpdated = row["Modified"];
+  c.sqlUpdated = string(row["Modified"]);
   c.counter = row["Counter"];
   c.Removed = row["Removed"];
 
@@ -1709,7 +1709,7 @@ void MeosSQL::storeCard(const RowWrapper &row, oCard &c)
   c.batteryDate = row["BDate"];
   c.importPunches(string(row["Punches"]));
 
-  c.sqlUpdated = row["Modified"];
+  c.sqlUpdated = string(row["Modified"]);
   c.counter = row["Counter"];
   c.Removed = row["Removed"];
 
@@ -1732,7 +1732,7 @@ void MeosSQL::storePunch(const RowWrapper &row, oFreePunch &p, bool rehash)
   p.punchUnit = row["Unit"];
   p.origin = row["Origin"];
 
-  p.sqlUpdated = row["Modified"];
+  p.sqlUpdated = string(row["Modified"]);
   p.counter = row["Counter"];
   p.Removed = row["Removed"];
 
@@ -1789,7 +1789,7 @@ OpFailStatus MeosSQL::storeClass(const RowWrapper &row, oClass &c,
 
   c.importCourses(multip);
 
-  c.sqlUpdated = row["Modified"];
+  c.sqlUpdated = string(row["Modified"]);
   c.counter = row["Counter"];
   c.Removed = row["Removed"];
 
@@ -1865,7 +1865,7 @@ OpFailStatus MeosSQL::storeCourse(const RowWrapper &row, oCourse &c,
     }
   }
 
-  c.sqlUpdated = row["Modified"];
+  c.sqlUpdated = string(row["Modified"]);
   c.counter = row["Counter"];
   c.Removed = row["Removed"];
 
@@ -1909,7 +1909,7 @@ OpFailStatus MeosSQL::storeRunner(const RowWrapper &row, oRunner &r,
   r.inputPlace = row["InputPlace"];
 
   r.Removed = row["Removed"];
-  r.sqlUpdated = row["Modified"];
+  r.sqlUpdated = string(row["Modified"]);
   r.counter = row["Counter"];
   int oldHeat = r.getDCI().getInt("Heat");
   storeData(r.getDI(), row, oe->dataRevision);
@@ -2083,7 +2083,7 @@ OpFailStatus MeosSQL::storeTeam(const RowWrapper &row, oTeam &t,
   if (t.Removed)
     t.prepareRemove();
 
-  t.sqlUpdated = row["Modified"];
+  t.sqlUpdated = string(row["Modified"]);
   t.counter = row["Counter"];
 
   if (!t.Removed) {
@@ -3181,7 +3181,7 @@ OpFailStatus MeosSQL::updateTime(const char *oTable, oBase *ob)
   auto res = query.store();
 
   if (!res.empty()) {
-    ob->sqlUpdated=res.at(0)["Modified"];
+    ob->sqlUpdated=string(res.at(0)["Modified"]);
     ob->counter = res.at(0)["Counter"];
     ob->changed=false; //Mark as saved.
     // Mark all data as stored in memory

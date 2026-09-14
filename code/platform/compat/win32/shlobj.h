@@ -34,3 +34,12 @@ typedef struct _browseinfoW {
 LPITEMIDLIST SHBrowseForFolder(BROWSEINFO *browseInfo);
 BOOL SHGetPathFromIDList(LPCITEMIDLIST idList, LPWSTR path);
 HRESULT SHGetMalloc(LPMALLOC *malloc);
+
+// Special folders, mapped to the XDG folders of the desktop (QStandardPaths):
+// CSIDL_APPDATA is the user's data folder (~/.local/share), CSIDL_PERSONAL the home
+// folder's documents and CSIDL_DESKTOPDIRECTORY the desktop.
+#define CSIDL_PERSONAL         0x0005
+#define CSIDL_DESKTOPDIRECTORY 0x0010
+#define CSIDL_APPDATA          0x001a
+
+BOOL SHGetSpecialFolderPath(HWND owner, LPWSTR path, int folder, BOOL create);

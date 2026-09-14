@@ -61,6 +61,25 @@ std::uintptr_t _beginthread(void (*start)(void *), unsigned /*stackSize*/, void 
   return reinterpret_cast<std::uintptr_t>(handle);
 }
 
+std::uintptr_t _beginthreadex(void * /*security*/, unsigned /*stackSize*/,
+                              unsigned (__stdcall *start)(void *), void *argument,
+                              unsigned /*initFlag*/, unsigned *threadId) {
+  auto thread = std::make_shared<meos_platform::ThreadObject>();
+  const HANDLE handle = meos_platform::registerObject(thread);
+  if (threadId)
+    *threadId = 0;
+
+  // Unlike _beginthread, the caller owns the handle and closes it.
+  std::thread([thread, start, argument] {
+    currentThread = thread;
+    thread->exitCode = start(argument);
+    thread->finished = true;
+    currentThread.reset();
+  }).detach();
+
+  return reinterpret_cast<std::uintptr_t>(handle);
+}
+
 // Asks the thread to end. Unlike on Windows this returns before the thread has
 // ended: MeOS calls TerminateThread while holding a critical section that the
 // thread itself needs, so waiting here would deadlock.
@@ -82,7 +101,7 @@ BOOL GetExitCodeThread(HANDLE thread, LPDWORD exitCode) {
     SetLastError(ERROR_INVALID_HANDLE);
     return FALSE;
   }
-  *exitCode = object->finished ? 0 : STILL_ACTIVE;
+  *exitCode = object->finished ? object->exitCode.load() : STILL_ACTIVE;
   return TRUE;
 }
 

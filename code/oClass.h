@@ -303,7 +303,7 @@ protected:
   // Used to force show of full multi course dialog
   bool tShowMultiDialog;
 
-  static constexpr int dataSize = 512+64;
+  static constexpr int dataSize = (512+64) * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
 
   BYTE oData[dataSize];

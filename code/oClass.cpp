@@ -66,7 +66,7 @@ oClass::oClass(oEvent *poe): oBase(poe)
   tSortIndex = 0;
   tMaxTime = 0;
   tCoursesChanged = false;
-  tStatusRevision = 0;
+  tStatusRevision = -1;
   tShowMultiDialog = false;
   parentClass = 0;
 }
@@ -88,7 +88,7 @@ oClass::oClass(oEvent *poe, int id): oBase(poe)
   tSortIndex = 0;
   tMaxTime = 0;
   tCoursesChanged = false;
-  tStatusRevision = 0;
+  tStatusRevision = -1;
   tShowMultiDialog = false;
 
   parentClass = 0;

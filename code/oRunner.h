@@ -657,7 +657,7 @@ protected:
   //Speaker data
   int speakerPriority = 0;
 
-  static constexpr int dataSize = 256+64;
+  static constexpr int dataSize = (256+64) * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
 
   BYTE oData[dataSize];

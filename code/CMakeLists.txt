@@ -3,9 +3,8 @@
 # code/MeOS.vcxproj remains a second build path on Windows. cmake/VcxprojSync.cmake
 # fails the configure step if both definitions list different source files.
 #
-# Linux port: meos_core (the platform independent domain logic) is built on Linux; the
-# other groups are compiled but not yet linked and follow in later stages, see
-# plans/linux-port.md.
+# Linux port: every source except meos.cpp (the application frame, stage 1.3) is built
+# and linked on Linux against the Win32 subset in platform/, see plans/linux-port.md.
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CaseAliases)
@@ -13,6 +12,9 @@ include(CheckCXXCompilerFlag)
 include(CheckIPOSupported)
 include(VcxprojSync)
 include(Win32Resources)
+if(NOT WIN32)
+  include(RestBed)
+endif()
 
 option(MEOS_SANITIZE "Build Debug configurations with AddressSanitizer and UBSan (GCC/Clang)" ON)
 
@@ -75,19 +77,21 @@ if(NOT MSVC)
   meos_generate_case_aliases("${MEOS_CASE_ALIAS_DIR}"
     SOURCES ${meos_include_scan_files}
     SEARCH_DIRS "${CMAKE_CURRENT_SOURCE_DIR}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/libharu"
                 "${CMAKE_CURRENT_SOURCE_DIR}/platform/compat/win32")
 endif()
 
 function(meos_apply_settings target)
   target_compile_features(${target} PUBLIC cxx_std_17)
   set_target_properties(${target} PROPERTIES CXX_EXTENSIONS OFF)
-  target_include_directories(${target} PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/libharu")
+  target_include_directories(${target} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
   # CMake does not define _DEBUG; MeOS has debug-only code guarded by it.
   target_compile_definitions(${target} PUBLIC "$<$<CONFIG:Debug>:_DEBUG>")
+
+  if(WIN32)
+    # The prebuilt libharu. Elsewhere hpdf.h comes from the system package.
+    target_include_directories(${target} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/libharu")
+  endif()
 
   if(MSVC)
     target_compile_definitions(${target} PUBLIC _WINDOWS UNICODE _UNICODE)
@@ -109,8 +113,10 @@ function(meos_apply_settings target)
       target_compile_options(${target} PUBLIC -Wno-changes-meaning)
     endif()
     if(MEOS_SANITIZE)
+      # Without the alignment check: oDataContainer keeps int fields at unaligned offsets
+      # of byte buffers, as on Windows; x86-64 and AArch64 read them correctly.
       target_compile_options(${target} PUBLIC
-        "$<$<CONFIG:Debug>:-fsanitize=address,undefined;-fno-omit-frame-pointer>")
+        "$<$<CONFIG:Debug>:-fsanitize=address,undefined;-fno-sanitize=alignment;-fno-omit-frame-pointer>")
       target_link_options(${target} PUBLIC "$<$<CONFIG:Debug>:-fsanitize=address,undefined>")
     endif()
   endif()
@@ -132,8 +138,11 @@ if(NOT WIN32)
 
   # The subset of the Win32 API used by the portable code, implemented with POSIX means.
   add_library(meos_platform OBJECT
+    platform/posix/minizip_iowin32.cpp
     platform/posix/win32_files.cpp
     platform/posix/win32_handle.cpp
+    platform/posix/win32_inet.cpp
+    platform/posix/win32_network.cpp
     platform/posix/win32_serial.cpp
     platform/posix/win32_strings.cpp
     platform/posix/win32_threads.cpp
@@ -141,18 +150,43 @@ if(NOT WIN32)
   meos_apply_settings(meos_platform)
   target_link_libraries(meos_platform PUBLIC Threads::Threads)
 
-  # The SI reader (stage 1.1). Compiled to keep it building; it is linked into the
-  # application once the GUI backend exists.
+  # System libraries in place of the prebuilt ones in lib64 (docs/BUILD_LINUX.md).
+  find_package(PkgConfig REQUIRED)
+  find_package(PNG REQUIRED)
+  find_package(ZLIB REQUIRED)
+  pkg_check_modules(MEOS_MINIZIP REQUIRED IMPORTED_TARGET minizip)
+  # The MariaDB client, or the MySQL client library in its place. The code includes the
+  # MySQL headers shipped in code/mysql ("mysql/mysql.h" relative to mysqlwrapper.h);
+  # mysql_api_check verifies that they match the header of the library linked here.
+  pkg_search_module(MEOS_MYSQL REQUIRED IMPORTED_TARGET libmariadb mysqlclient)
+  find_library(MEOS_HPDF_LIBRARY hpdf REQUIRED)
+  find_path(MEOS_HPDF_INCLUDE_DIR hpdf.h REQUIRED)
+  add_library(meos_hpdf INTERFACE)
+  target_include_directories(meos_hpdf INTERFACE "${MEOS_HPDF_INCLUDE_DIR}")
+  target_link_libraries(meos_hpdf INTERFACE "${MEOS_HPDF_LIBRARY}")
+  target_link_libraries(meos_core PUBLIC meos_hpdf)
+  # Explicit instantiations that optimized (LTO) builds need, see the file.
+  target_sources(meos_core PRIVATE platform/posix/intkeymap_instances.cpp)
+
+  # The SI reader (stage 1.1).
   add_library(meos_si OBJECT SportIdent.cpp)
   meos_apply_settings(meos_si)
 
-  # The GDI/window based sources and the tabs (stage 1.2). Compiled against the Win32
-  # declarations in platform/compat/win32; linked once the Qt backend implements them.
-  add_library(meos_gui OBJECT
-    animationdata.cpp autocomplete.cpp autotask.cpp gdioutput.cpp image.cpp maprenderer.cpp
-    printer.cpp progress.cpp Table.cpp toolbar.cpp
-    ${MEOS_UI_SOURCES})
+  # The GDI/window based sources, the tabs and the rest of the Win32 group (stage 1.2),
+  # built against the Win32 declarations in platform/compat/win32. meos.cpp follows in
+  # stage 1.3.
+  set(MEOS_LINUX_GUI_SOURCES ${MEOS_WIN32_SOURCES})
+  list(REMOVE_ITEM MEOS_LINUX_GUI_SOURCES meos.cpp SportIdent.cpp)
+  add_library(meos_gui OBJECT ${MEOS_LINUX_GUI_SOURCES} ${MEOS_UI_SOURCES})
   meos_apply_settings(meos_gui)
+  target_link_libraries(meos_gui PUBLIC PNG::PNG ZLIB::ZLIB PkgConfig::MEOS_MINIZIP)
+
+  # MySQL, REST server, HTTP and online services. They link since stage 1.2 (the tabs
+  # need them); WinInet reports no connection until stage 2.
+  meos_add_restbed(meos_restbed)
+  add_library(meos_net OBJECT ${MEOS_NET_SOURCES})
+  meos_apply_settings(meos_net)
+  target_link_libraries(meos_net PUBLIC meos_restbed PkgConfig::MEOS_MYSQL)
 
   # The Win32 window manager subset (USER32) on Qt 6 widgets (stage 1.2).
   find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets)
@@ -170,6 +204,7 @@ if(NOT WIN32)
     platform/qt/win32_message.cpp
     platform/qt/win32_resources.cpp
     platform/qt/win32_screen.cpp
+    platform/qt/win32_sound.cpp
     platform/qt/win32_text.cpp
     platform/qt/win32_window.cpp)
   meos_apply_settings(meos_win32ui)
@@ -189,6 +224,49 @@ if(NOT WIN32)
   add_library(meos_win32ui_main OBJECT platform/qt/win32_main.cpp)
   meos_apply_settings(meos_win32ui_main)
   target_link_libraries(meos_win32ui_main PUBLIC Qt6::Widgets)
+
+  # The globals and helper functions of meos.cpp for programs without it, and a demo
+  # competition (platform/qt/workbench/app_frame.h).
+  add_library(meos_app_frame OBJECT
+    platform/qt/workbench/app_frame.cpp
+    platform/qt/workbench/demo_competition.cpp)
+  meos_apply_settings(meos_app_frame)
+
+  # Links all of MeOS except meos.cpp: object libraries do not pass their objects on,
+  # so every program lists them.
+  function(meos_link_meos target)
+    target_link_libraries(${target} PRIVATE
+      meos_core meos_gui meos_net meos_si meos_app_frame meos_win32ui meos_resources meos_platform
+      meos_win32ui_main)
+  endfunction()
+
+  # GUI workbench (stage 1.2.6): real gdioutput pages on the Qt backend, for manual
+  # checks and the comparison with Windows. Not part of a MeOS installation.
+  add_executable(meos_gui_workbench platform/qt/workbench/workbench.cpp)
+  meos_apply_settings(meos_gui_workbench)
+  meos_link_meos(meos_gui_workbench)
+
+  # Load test of the core (stage 1.2.6): competition file round trip, results, result
+  # list, ZIP archive. XDG_DATA_HOME keeps its settings inside the build tree.
+  add_executable(meos_core_load_test platform/qt/tests/core_load_test.cpp)
+  meos_apply_settings(meos_core_load_test)
+  target_include_directories(meos_core_load_test PRIVATE platform/qt/workbench)
+  meos_link_meos(meos_core_load_test)
+  add_test(NAME core_load_test COMMAND meos_core_load_test)
+  set_tests_properties(core_load_test PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/core_load_test_data"
+    TIMEOUT 300)
+
+  # The MySQL headers in code/mysql (used by mysqlwrapper.cpp) match those of the linked
+  # client library. mysql_api_vendored.cpp finds "mysql/mysql.h" in code/, the system
+  # header comes from the include directories of the pkg-config module.
+  add_executable(meos_mysql_api_check
+    platform/posix/tests/mysql_api_check.cpp
+    platform/posix/tests/mysql_api_system.cpp
+    platform/posix/tests/mysql_api_vendored.cpp)
+  meos_apply_settings(meos_mysql_api_check)
+  target_link_libraries(meos_mysql_api_check PRIVATE PkgConfig::MEOS_MYSQL)
+  add_test(NAME mysql_api_check COMMAND meos_mysql_api_check)
 
   # Self test of the compatibility layer (run with ctest).
   add_executable(meos_platform_selftest platform/posix/tests/platform_selftest.cpp)

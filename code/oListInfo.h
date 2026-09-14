@@ -477,7 +477,7 @@ struct oListParam {
   bool showInterTimes;
   bool showSplitTimes;
   bool splitAnalysis;
-  bool showInterTitle;
+  bool showInterTitle = false;
   wstring title;
   wstring name;
   int inputNumber;

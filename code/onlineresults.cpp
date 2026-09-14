@@ -565,7 +565,7 @@ void OnlineResults::process(gdioutput &gdi, oEvent *oe, AutoSyncType ast) {
             res = xml.getObject("MOPStatus");
           }
           catch (std::exception&) {
-            ifstream is(result.c_str());
+            ifstream is(meosPath(result));
             is.seekg(0, is.end);
             int length = (int)is.tellg();
             is.seekg(0, is.beg);

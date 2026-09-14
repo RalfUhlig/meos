@@ -81,7 +81,7 @@ protected:
   wstring Name;
   bool decodeNumbers(string s);
 
-  static const int dataSize = 64;
+  static const int dataSize = 64 * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
   BYTE oData[dataSize];
   BYTE oDataOld[dataSize];

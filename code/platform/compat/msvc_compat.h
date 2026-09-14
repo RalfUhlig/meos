@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <ctime>
 #include <cwctype>
 #include <limits>
 #include <stdexcept>
@@ -704,6 +705,13 @@ inline int _wstat(const wchar_t *file, struct stat *st) {
   return ::stat(meos_compat::nativePath(file).c_str(), st);
 }
 
+typedef std::int64_t __time64_t;
+
+// Inverse of gmtime: the tm fields are UTC (onlineinput.cpp).
+inline __time64_t _mkgmtime64(std::tm *utc) {
+  return static_cast<__time64_t>(::timegm(utc));
+}
+
 inline int _wmkdir(const wchar_t *dir) {
   return ::mkdir(meos_compat::nativePath(dir).c_str(), 0777);
 }
@@ -717,6 +725,18 @@ inline errno_t _wfopen_s(FILE **fp, const wchar_t *file, const wchar_t *mode) {
     narrowMode.erase(ccs);
   *fp = std::fopen(meos_compat::nativePath(file).c_str(), narrowMode.c_str());
   return *fp ? 0 : errno;
+}
+
+inline FILE *_wfopen(const wchar_t *file, const wchar_t *mode) {
+  FILE *fp = nullptr;
+  _wfopen_s(&fp, file, mode);
+  return fp;
+}
+
+// The minizip headers shipped with MeOS map fopen64 to _wfopen for MSVC, and zip.cpp
+// calls it with wide names. This overload keeps glibc's fopen64(const char *, ...).
+inline FILE *fopen64(const wchar_t *file, const wchar_t *mode) {
+  return _wfopen(file, mode);
 }
 
 #endif // !_WIN32

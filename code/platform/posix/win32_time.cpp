@@ -240,18 +240,65 @@ BOOL TzSpecificLocalTimeToSystemTime(const TIME_ZONE_INFORMATION *timeZone, cons
   return TRUE;
 }
 
+namespace {
+
+std::int64_t currentUtcOffsetTicks() {
+  const time_t now = time(nullptr);
+  std::tm local;
+  if (!localtime_r(&now, &local))
+    return 0;
+  return static_cast<std::int64_t>(local.tm_gmtoff) * 10000000LL;
+}
+
+std::int64_t ticksOf(const FILETIME &ft) {
+  return static_cast<std::int64_t>((static_cast<std::uint64_t>(ft.dwHighDateTime) << 32) | ft.dwLowDateTime);
+}
+
+void setTicks(LPFILETIME ft, std::int64_t ticks) {
+  ft->dwLowDateTime = static_cast<DWORD>(static_cast<std::uint64_t>(ticks) & 0xFFFFFFFFULL);
+  ft->dwHighDateTime = static_cast<DWORD>(static_cast<std::uint64_t>(ticks) >> 32);
+}
+
+} // namespace
+
+// As on Windows, the current UTC offset is applied regardless of the date.
+BOOL LocalFileTimeToFileTime(const FILETIME *localFileTime, LPFILETIME fileTime) {
+  if (!localFileTime || !fileTime)
+    return FALSE;
+  setTicks(fileTime, ticksOf(*localFileTime) - currentUtcOffsetTicks());
+  return TRUE;
+}
+
+// MS-DOS date: day (bits 0-4), month (5-8), years since 1980 (9-15);
+// time: seconds / 2 (bits 0-4), minute (5-10), hour (11-15).
+BOOL DosDateTimeToFileTime(WORD fatDate, WORD fatTime, LPFILETIME fileTime) {
+  if (!fileTime)
+    return FALSE;
+  SYSTEMTIME st{};
+  st.wYear = static_cast<WORD>(1980 + (fatDate >> 9));
+  st.wMonth = static_cast<WORD>((fatDate >> 5) & 0x0F);
+  st.wDay = static_cast<WORD>(fatDate & 0x1F);
+  st.wHour = static_cast<WORD>(fatTime >> 11);
+  st.wMinute = static_cast<WORD>((fatTime >> 5) & 0x3F);
+  st.wSecond = static_cast<WORD>((fatTime & 0x1F) * 2);
+  return SystemTimeToFileTime(&st, fileTime);
+}
+
+// Only the years 1980 to 2107 can be represented.
+BOOL FileTimeToDosDateTime(const FILETIME *fileTime, LPWORD fatDate, LPWORD fatTime) {
+  SYSTEMTIME st;
+  if (!fileTime || !fatDate || !fatTime || !FileTimeToSystemTime(fileTime, &st) || st.wYear < 1980 ||
+      st.wYear > 2107)
+    return FALSE;
+  *fatDate = static_cast<WORD>(((st.wYear - 1980) << 9) | (st.wMonth << 5) | st.wDay);
+  *fatTime = static_cast<WORD>((st.wHour << 11) | (st.wMinute << 5) | (st.wSecond / 2));
+  return TRUE;
+}
+
 // As on Windows, the current UTC offset is applied regardless of the date.
 BOOL FileTimeToLocalFileTime(const FILETIME *fileTime, LPFILETIME localFileTime) {
   if (!fileTime || !localFileTime)
     return FALSE;
-  const time_t now = time(nullptr);
-  std::tm local;
-  if (!localtime_r(&now, &local))
-    return FALSE;
-  const std::int64_t ticks =
-      static_cast<std::int64_t>((static_cast<std::uint64_t>(fileTime->dwHighDateTime) << 32) | fileTime->dwLowDateTime) +
-      static_cast<std::int64_t>(local.tm_gmtoff) * 10000000LL;
-  localFileTime->dwLowDateTime = static_cast<DWORD>(static_cast<std::uint64_t>(ticks) & 0xFFFFFFFFULL);
-  localFileTime->dwHighDateTime = static_cast<DWORD>(static_cast<std::uint64_t>(ticks) >> 32);
+  setTicks(localFileTime, ticksOf(*fileTime) + currentUtcOffsetTicks());
   return TRUE;
 }

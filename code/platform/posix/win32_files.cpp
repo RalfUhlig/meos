@@ -103,6 +103,7 @@ const ErrorMessage errorMessages[] = {
   {ERROR_BUFFER_OVERFLOW, L"The file name is too long."},
   {ERROR_DISK_FULL, L"There is not enough space on the disk."},
   {ERROR_INSUFFICIENT_BUFFER, L"The data area passed to a system call is too small."},
+  {ERROR_DIR_NOT_EMPTY, L"The directory is not empty."},
   {ERROR_ALREADY_EXISTS, L"Cannot create a file when that file already exists."},
 };
 
@@ -232,6 +233,178 @@ BOOL CopyFile(LPCWSTR existingFileName, LPCWSTR newFileName, BOOL failIfExists) 
   const auto modified = std::filesystem::last_write_time(from, ec);
   if (!ec)
     std::filesystem::last_write_time(to, modified, ec);
+  return TRUE;
+}
+
+BOOL CreateDirectory(LPCWSTR pathName, LPSECURITY_ATTRIBUTES /*security*/) {
+  if (!pathName) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return FALSE;
+  }
+  if (::mkdir(meos_compat::nativePath(pathName).c_str(), 0777) != 0) {
+    // A missing parent directory is a missing path on Windows.
+    SetLastError(errno == ENOENT ? ERROR_PATH_NOT_FOUND : meos_platform::win32ErrorFromErrno(errno));
+    return FALSE;
+  }
+  return TRUE;
+}
+
+DWORD GetTempPath(DWORD bufferLength, LPWSTR buffer) {
+  const char *environment = std::getenv("TMPDIR");
+  std::wstring path = meos_compat::utf8ToWide(environment && *environment ? environment : "/tmp");
+  if (path.empty() || path.back() != L'/')
+    path.push_back(L'/');
+  if (!buffer || bufferLength < path.size() + 1)
+    return static_cast<DWORD>(path.size() + 1);
+  std::wmemcpy(buffer, path.c_str(), path.size() + 1);
+  return static_cast<DWORD>(path.size());
+}
+
+UINT GetTempFileName(LPCWSTR pathName, LPCWSTR prefixString, UINT unique, LPWSTR tempFileName) {
+  if (!pathName || !tempFileName) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return 0;
+  }
+  std::wstring base(pathName);
+  if (base.size() > MAX_PATH - 14) {
+    SetLastError(ERROR_BUFFER_OVERFLOW);
+    return 0;
+  }
+  if (!base.empty() && base.back() != L'/' && base.back() != L'\\')
+    base.push_back(base.find(L'\\') != std::wstring::npos ? L'\\' : L'/');
+  base += std::wstring(prefixString ? prefixString : L"").substr(0, 3);
+
+  const auto nameFor = [&base](UINT number) {
+    wchar_t hex[16];
+    swprintf_s(hex, L"%X.TMP", number & 0xFFFF);
+    return base + hex;
+  };
+
+  if (unique != 0) {
+    const std::wstring name = nameFor(unique);
+    std::wmemcpy(tempFileName, name.c_str(), name.size() + 1);
+    return unique & 0xFFFF;
+  }
+
+  struct stat st;
+  if (::stat(meos_compat::nativePath(pathName).c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {
+    SetLastError(ERROR_DIRECTORY);
+    return 0;
+  }
+  const UINT start = (static_cast<UINT>(GetTickCount()) ^ static_cast<UINT>(::getpid())) & 0xFFFF;
+  for (UINT k = 0; k < 0x10000; k++) {
+    const UINT number = ((start + k) & 0xFFFF) == 0 ? 1 : (start + k) & 0xFFFF;
+    const std::wstring name = nameFor(number);
+    const int fd = ::open(meos_compat::nativePath(name.c_str()).c_str(), O_CREAT | O_EXCL | O_WRONLY | O_CLOEXEC, 0666);
+    if (fd >= 0) {
+      ::close(fd);
+      std::wmemcpy(tempFileName, name.c_str(), name.size() + 1);
+      return number;
+    }
+    if (errno != EEXIST) {
+      SetLastError(meos_platform::win32ErrorFromErrno(errno));
+      return 0;
+    }
+  }
+  SetLastError(ERROR_FILE_EXISTS);
+  return 0;
+}
+
+DWORD GetModuleFileName(HMODULE module, LPWSTR fileName, DWORD size) {
+  if (module || !fileName || size == 0) {
+    SetLastError(module ? ERROR_MOD_NOT_FOUND : ERROR_INVALID_PARAMETER);
+    return 0;
+  }
+  char exe[PATH_MAX];
+  const ssize_t length = ::readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+  if (length < 0) {
+    SetLastError(meos_platform::win32ErrorFromErrno(errno));
+    return 0;
+  }
+  exe[length] = 0;
+  const std::wstring path = meos_compat::utf8ToWide(exe);
+  // As on Windows: a truncated, null-terminated name and ERROR_INSUFFICIENT_BUFFER.
+  if (path.size() + 1 > size) {
+    std::wmemcpy(fileName, path.c_str(), size - 1);
+    fileName[size - 1] = 0;
+    SetLastError(ERROR_INSUFFICIENT_BUFFER);
+    return size;
+  }
+  std::wmemcpy(fileName, path.c_str(), path.size() + 1);
+  SetLastError(ERROR_SUCCESS);
+  return static_cast<DWORD>(path.size());
+}
+
+BOOL RemoveDirectory(LPCWSTR pathName) {
+  if (!pathName) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return FALSE;
+  }
+  if (::rmdir(meos_compat::nativePath(pathName).c_str()) != 0) {
+    SetLastError(errno == ENOTEMPTY || errno == EEXIST ? ERROR_DIR_NOT_EMPTY
+                                                       : meos_platform::win32ErrorFromErrno(errno));
+    return FALSE;
+  }
+  return TRUE;
+}
+
+DWORD GetFileSize(HANDLE file, LPDWORD fileSizeHigh) {
+  const std::shared_ptr<meos_platform::FileObject> object = meos_platform::fromHandle<meos_platform::FileObject>(file);
+  struct stat st;
+  if (!object || ::fstat(object->fd, &st) != 0) {
+    SetLastError(ERROR_INVALID_HANDLE);
+    return INVALID_FILE_SIZE;
+  }
+  const std::uint64_t size = static_cast<std::uint64_t>(st.st_size);
+  if (fileSizeHigh)
+    *fileSizeHigh = static_cast<DWORD>(size >> 32);
+  // A size whose low part is INVALID_FILE_SIZE is told apart by GetLastError.
+  SetLastError(ERROR_SUCCESS);
+  return static_cast<DWORD>(size & 0xFFFFFFFFULL);
+}
+
+BOOL GetFileTime(HANDLE file, LPFILETIME creationTime, LPFILETIME lastAccessTime, LPFILETIME lastWriteTime) {
+  const std::shared_ptr<meos_platform::FileObject> object = meos_platform::fromHandle<meos_platform::FileObject>(file);
+  struct stat st;
+  if (!object || ::fstat(object->fd, &st) != 0) {
+    SetLastError(ERROR_INVALID_HANDLE);
+    return FALSE;
+  }
+  if (creationTime)
+    *creationTime = toFileTime(st.st_ctim);
+  if (lastAccessTime)
+    *lastAccessTime = toFileTime(st.st_atim);
+  if (lastWriteTime)
+    *lastWriteTime = toFileTime(st.st_mtim);
+  return TRUE;
+}
+
+BOOL SetFileTime(HANDLE file, const FILETIME * /*creationTime*/, const FILETIME *lastAccessTime,
+                 const FILETIME *lastWriteTime) {
+  const std::shared_ptr<meos_platform::FileObject> object = meos_platform::fromHandle<meos_platform::FileObject>(file);
+  if (!object) {
+    SetLastError(ERROR_INVALID_HANDLE);
+    return FALSE;
+  }
+  timespec times[2];
+  for (int k = 0; k < 2; k++) {
+    const FILETIME *ft = k == 0 ? lastAccessTime : lastWriteTime;
+    if (!ft) {
+      times[k].tv_sec = 0;
+      times[k].tv_nsec = UTIME_OMIT;
+      continue;
+    }
+    const std::int64_t ticks =
+        static_cast<std::int64_t>((static_cast<std::uint64_t>(ft->dwHighDateTime) << 32) | ft->dwLowDateTime) -
+        fileTimeUnixEpoch;
+    const std::int64_t seconds = ticks >= 0 ? ticks / 10000000LL : -((-ticks + 9999999LL) / 10000000LL);
+    times[k].tv_sec = static_cast<time_t>(seconds);
+    times[k].tv_nsec = static_cast<long>((ticks - seconds * 10000000LL) * 100);
+  }
+  if (::futimens(object->fd, times) != 0) {
+    SetLastError(meos_platform::win32ErrorFromErrno(errno));
+    return FALSE;
+  }
   return TRUE;
 }
 

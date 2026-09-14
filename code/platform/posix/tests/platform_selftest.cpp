@@ -13,7 +13,9 @@
 
 #include "StdAfx.h"
 
+#include <iphlpapi.h>
 #include <process.h>
+#include <wininet.h>
 #include <winsock2.h>
 
 #include <cstdio>
@@ -128,6 +130,37 @@ void testTime() {
   CHECK(GetTickCount64() > 0);
 }
 
+void testDosTimes() {
+  // 2026-09-14 12:34:56 as MS-DOS date and time (two-second resolution).
+  const WORD fatDate = WORD((46 << 9) | (9 << 5) | 14);
+  const WORD fatTime = WORD((12 << 11) | (34 << 5) | 28);
+  FILETIME ft;
+  CHECK(DosDateTimeToFileTime(fatDate, fatTime, &ft));
+  SYSTEMTIME st;
+  CHECK(FileTimeToSystemTime(&ft, &st));
+  CHECK(st.wYear == 2026 && st.wMonth == 9 && st.wDay == 14 && st.wHour == 12 && st.wMinute == 34 && st.wSecond == 56);
+  WORD date = 0, time = 0;
+  CHECK(FileTimeToDosDateTime(&ft, &date, &time) && date == fatDate && time == fatTime);
+  SYSTEMTIME early = {1979, 12, 0, 31, 0, 0, 0, 0};
+  CHECK(SystemTimeToFileTime(&early, &ft) && !FileTimeToDosDateTime(&ft, &date, &time));
+
+  // LocalFileTimeToFileTime undoes FileTimeToLocalFileTime.
+  SYSTEMTIME noon = {2026, 1, 0, 15, 12, 0, 0, 0};
+  FILETIME utc, local, back;
+  CHECK(SystemTimeToFileTime(&noon, &utc));
+  CHECK(FileTimeToLocalFileTime(&utc, &local) && LocalFileTimeToFileTime(&local, &back));
+  CHECK(back.dwLowDateTime == utc.dwLowDateTime && back.dwHighDateTime == utc.dwHighDateTime);
+
+  // _mkgmtime64 reads the fields as UTC (onlineinput.cpp).
+  std::tm tm = {};
+  tm.tm_year = 70;
+  tm.tm_mon = 0;
+  tm.tm_mday = 2;
+  tm.tm_hour = 1;
+  tm.tm_isdst = -1;
+  CHECK(_mkgmtime64(&tm) == 86400 + 3600);
+}
+
 void testPathsAndIntegers() {
   wchar_t drive[_MAX_DRIVE], dir[_MAX_DIR], fname[_MAX_FNAME], ext[_MAX_EXT];
   CHECK(_wsplitpath_s(L"C:\\dir\\sub\\file.name.xml", drive, dir, fname, ext) == 0);
@@ -201,6 +234,70 @@ void testFiles() {
   out.close();
   CHECK(std::filesystem::exists(base / "stream.txt"));
 
+  // _wfopen and the wide fopen64 of the minizip headers (zip.cpp).
+  FILE *wide = _wfopen((dir + L"\\stream.txt").c_str(), L"rb");
+  CHECK(wide != nullptr);
+  if (wide) {
+    char text[4] = {0};
+    CHECK(std::fread(text, 1, 3, wide) == 2 && std::string(text) == "ok");
+    std::fclose(wide);
+  }
+  wide = fopen64((dir + L"\\missing.txt").c_str(), L"rb");
+  CHECK(wide == nullptr);
+
+  // Size and times of an open file (download.cpp, zip.cpp).
+  HANDLE sized = CreateFile((dir + L"\\stream.txt").c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  CHECK(sized != INVALID_HANDLE_VALUE);
+  DWORD high = 1;
+  CHECK(GetFileSize(sized, &high) == 2 && high == 0);
+  FILETIME created, accessed, written;
+  CHECK(GetFileTime(sized, &created, &accessed, &written));
+  SYSTEMTIME st = {2024, 5, 0, 17, 10, 30, 42, 0};
+  FILETIME stamp;
+  CHECK(SystemTimeToFileTime(&st, &stamp));
+  CHECK(SetFileTime(sized, nullptr, nullptr, &stamp));
+  FILETIME after, accessedAfter;
+  CHECK(GetFileTime(sized, nullptr, &accessedAfter, &after));
+  CHECK(after.dwLowDateTime == stamp.dwLowDateTime && after.dwHighDateTime == stamp.dwHighDateTime);
+  CHECK(accessedAfter.dwLowDateTime == accessed.dwLowDateTime && accessedAfter.dwHighDateTime == accessed.dwHighDateTime);
+  CHECK(CloseHandle(sized));
+  CHECK(GetFileSize(sized, nullptr) == INVALID_FILE_SIZE && GetLastError() == ERROR_INVALID_HANDLE);
+
+  // Directories.
+  CHECK(CreateDirectory((dir + L"\\sub").c_str(), nullptr));
+  CHECK(!CreateDirectory((dir + L"\\sub").c_str(), nullptr) && GetLastError() == ERROR_ALREADY_EXISTS);
+  CHECK(!CreateDirectory((dir + L"\\missing\\sub").c_str(), nullptr) && GetLastError() == ERROR_PATH_NOT_FOUND);
+  CHECK(CopyFile((dir + L"\\a.xml").c_str(), (dir + L"\\sub\\a.xml").c_str(), TRUE));
+  CHECK(!RemoveDirectory((dir + L"\\sub").c_str()) && GetLastError() == ERROR_DIR_NOT_EMPTY);
+  CHECK(DeleteFile((dir + L"\\sub\\a.xml").c_str()));
+  CHECK(RemoveDirectory((dir + L"\\sub").c_str()));
+  CHECK(!RemoveDirectory((dir + L"\\sub").c_str()) && GetLastError() == ERROR_FILE_NOT_FOUND);
+
+  // Temporary files (meos.cpp: getTempPath, getTempFile).
+  wchar_t tempPath[MAX_PATH];
+  const DWORD tempLength = GetTempPath(MAX_PATH, tempPath);
+  CHECK(tempLength > 0 && tempLength == std::wcslen(tempPath) && tempPath[tempLength - 1] == L'/');
+  CHECK(GetTempPath(1, nullptr) == tempLength + 1);
+  wchar_t tempName[MAX_PATH];
+  const UINT number = GetTempFileName(dir.c_str(), L"meosx", 0, tempName);
+  CHECK(number != 0);
+  const std::wstring created1(tempName);
+  CHECK(created1.find(dir + L"/meo") == 0 && created1.size() > 8 && created1.substr(created1.size() - 4) == L".TMP");
+  CHECK(GetFileAttributes(tempName) != INVALID_FILE_ATTRIBUTES); // created, empty
+  CHECK(GetTempFileName(dir.c_str(), L"ix", 0, tempName) != 0 && created1 != tempName);
+  CHECK(GetTempFileName((dir + L"\\ix").c_str(), L"ix", 0, tempName) == 0 && GetLastError() == ERROR_DIRECTORY);
+  CHECK(GetTempFileName(dir.c_str(), L"ab", 0x1234, tempName) == 0x1234);
+  CHECK(std::wstring(tempName) == dir + L"/ab1234.TMP" && GetFileAttributes(tempName) == INVALID_FILE_ATTRIBUTES);
+
+  // The program's own file (meos.cpp: exePath).
+  wchar_t module[MAX_PATH];
+  const DWORD moduleLength = GetModuleFileName(nullptr, module, MAX_PATH);
+  CHECK(moduleLength > 0 && std::wstring(module).find(L"meos_platform_selftest") != std::wstring::npos);
+  wchar_t shortModule[8];
+  CHECK(GetModuleFileName(nullptr, shortModule, 8) == 8 && shortModule[7] == 0 &&
+        GetLastError() == ERROR_INSUFFICIENT_BUFFER);
+
   std::filesystem::remove_all(base);
 }
 
@@ -240,6 +337,26 @@ void testThreads() {
   for (int wait = 0; wait < 100 && GetExitCodeThread(thread, &exitCode); wait++)
     Sleep(10);
   CHECK(!GetExitCodeThread(thread, &exitCode));
+
+  // _beginthreadex (mysqldaemon.cpp): the handle stays valid until CloseHandle and
+  // reports the return value of the thread function.
+  static std::atomic<bool> release{false};
+  static unsigned result = 42;
+  const HANDLE threadEx = reinterpret_cast<HANDLE>(_beginthreadex(
+      nullptr, 0, [](void *argument) -> unsigned {
+        while (!release)
+          Sleep(1);
+        return *static_cast<unsigned *>(argument);
+      }, &result, 0, nullptr));
+  CHECK(threadEx != nullptr);
+  CHECK(GetExitCodeThread(threadEx, &exitCode) && exitCode == STILL_ACTIVE);
+  release = true;
+  for (int wait = 0; wait < 100 && GetExitCodeThread(threadEx, &exitCode) && exitCode == STILL_ACTIVE; wait++)
+    Sleep(10);
+  CHECK(GetExitCodeThread(threadEx, &exitCode) && exitCode == 42);
+  CHECK(CloseHandle(threadEx));
+  CHECK(!GetExitCodeThread(threadEx, &exitCode));
+  CHECK(!CloseHandle(threadEx));
 }
 
 // A pseudo terminal stands in for the serial port of an SI master station.
@@ -418,7 +535,154 @@ void testSockets() {
   listener.join();
   CHECK(acceptError != 0);
   CHECK(closesocket(server) == 0);
+
+  // UDP with the Windows address types, as DirectSocket in socket.cpp.
+  CHECK(sizeof(SOCKADDR_IN) == sizeof(sockaddr_in));
+  CHECK(offsetof(SOCKADDR_IN, sin_addr) == offsetof(sockaddr_in, sin_addr));
+  CHECK(offsetof(SOCKADDR_IN, sin_port) == offsetof(sockaddr_in, sin_port));
+  SOCKADDR_IN address;
+  std::memset(&address, 0, sizeof(address));
+  address.sin_addr.S_un.S_un_b.s_b1 = 127;
+  address.sin_addr.S_un.S_un_b.s_b4 = 1;
+  CHECK(address.sin_addr.s_addr == htonl(INADDR_LOOPBACK));
+
+  const SOCKET receiver = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  address.sin_family = AF_INET;
+  address.sin_port = 0;
+  CHECK(bind(receiver, (SOCKADDR *)&address, sizeof(SOCKADDR_IN)) == 0);
+  socklen_t addressLength = sizeof(address);
+  CHECK(getsockname(static_cast<int>(receiver), (sockaddr *)&address, &addressLength) == 0);
+
+  fd_set fds;
+  timeval timeout = {0, 50000};
+  FD_ZERO(&fds);
+  FD_SET(receiver, &fds);
+  CHECK(select(0, &fds, NULL, NULL, &timeout) == 0);
+  CHECK(timeout.tv_sec == 0 && timeout.tv_usec == 50000); // Winsock leaves the timeout unchanged
+
+  const SOCKET senderSocket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  const int message = 4711;
+  CHECK(sendto(senderSocket, (char *)&message, sizeof(message), 0, (sockaddr *)&address, sizeof(address)) ==
+        sizeof(message));
+  FD_ZERO(&fds);
+  FD_SET(receiver, &fds);
+  timeout = {1, 0};
+  CHECK(select(0, &fds, NULL, NULL, &timeout) == 1 && FD_ISSET(receiver, &fds));
+  int received = 0;
+  SOCKADDR_IN peer;
+  int peerLength = sizeof(peer);
+  CHECK(recvfrom(receiver, (char *)&received, sizeof(received), 0, (sockaddr *)&peer, &peerLength) ==
+        sizeof(received));
+  CHECK(received == message && peerLength == sizeof(sockaddr_in) && peer.sin_addr.S_un.S_un_b.s_b1 == 127);
+  CHECK(closesocket(senderSocket) == 0 && closesocket(receiver) == 0);
   CHECK(WSACleanup() == 0);
+}
+
+// GetAdaptersAddresses as ListIpAddresses in download.cpp calls it.
+void testAdapters() {
+  ULONG size = 0;
+  CHECK(GetAdaptersAddresses(AF_UNSPEC, 0, nullptr, nullptr, &size) == ERROR_BUFFER_OVERFLOW && size > 0);
+  std::vector<char> buffer(size);
+  auto *adapters = reinterpret_cast<IP_ADAPTER_ADDRESSES *>(buffer.data());
+  ULONG tooSmall = sizeof(IP_ADAPTER_ADDRESSES);
+  CHECK(GetAdaptersAddresses(AF_UNSPEC, 0, nullptr, adapters, &tooSmall) == ERROR_BUFFER_OVERFLOW &&
+        tooSmall == size);
+  CHECK(GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST, nullptr, adapters, &size) ==
+        ERROR_SUCCESS);
+
+  bool loopback = false;
+  for (IP_ADAPTER_ADDRESSES *adapter = adapters; adapter; adapter = adapter->Next) {
+    CHECK(adapter->AdapterName != nullptr && adapter->IfIndex > 0);
+    for (IP_ADAPTER_UNICAST_ADDRESS *unicast = adapter->FirstUnicastAddress; unicast; unicast = unicast->Next) {
+      CHECK(unicast->Address.lpSockaddr->sa_family == AF_INET); // AF_INET only
+      const auto *ipv4 = reinterpret_cast<SOCKADDR_IN *>(unicast->Address.lpSockaddr);
+      if (adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK && ipv4->sin_addr.S_un.S_un_b.s_b1 == 127)
+        loopback = true;
+    }
+  }
+  CHECK(loopback);
+  CHECK(GetAdaptersAddresses(AF_APPLETALK, 0, nullptr, adapters, &size) == ERROR_INVALID_PARAMETER);
+}
+
+// WinInet as download.cpp uses it; until stage 2 no server can be reached.
+void testInternet() {
+  URL_COMPONENTS uc;
+  std::memset(&uc, 0, sizeof(uc));
+  uc.dwStructSize = sizeof(uc);
+  wchar_t host[64], path[64], extra[64];
+  uc.lpszHostName = host;
+  uc.dwHostNameLength = 64;
+  uc.lpszUrlPath = path;
+  uc.dwUrlPathLength = 64;
+  uc.lpszExtraInfo = extra;
+  uc.dwExtraInfoLength = 64;
+  const std::wstring url = L"https://user:secret@results.example.org:8443/meos/post%20it.php?id=1%202#top";
+  CHECK(InternetCrackUrl(url.c_str(), DWORD(url.size()), ICU_ESCAPE, &uc));
+  CHECK(uc.nScheme == INTERNET_SCHEME_HTTPS && uc.nPort == 8443);
+  CHECK(std::wstring(host) == L"results.example.org" && uc.dwHostNameLength == 19);
+  CHECK(std::wstring(path) == L"/meos/post it.php" && uc.dwUrlPathLength == 17);
+  CHECK(std::wstring(extra) == L"?id=1 2#top");
+
+  // Components without buffer point into the URL.
+  URL_COMPONENTS parts;
+  std::memset(&parts, 0, sizeof(parts));
+  parts.dwStructSize = sizeof(parts);
+  parts.dwSchemeLength = 1;
+  parts.dwHostNameLength = 1;
+  parts.dwUserNameLength = 1;
+  parts.dwPasswordLength = 1;
+  parts.dwUrlPathLength = 1;
+  CHECK(InternetCrackUrl(url.c_str(), 0, 0, &parts));
+  CHECK(std::wstring(parts.lpszScheme, parts.dwSchemeLength) == L"https");
+  CHECK(std::wstring(parts.lpszUserName, parts.dwUserNameLength) == L"user");
+  CHECK(std::wstring(parts.lpszPassword, parts.dwPasswordLength) == L"secret");
+  CHECK(std::wstring(parts.lpszHostName, parts.dwHostNameLength) == L"results.example.org");
+  CHECK(std::wstring(parts.lpszUrlPath, parts.dwUrlPathLength) == L"/meos/post%20it.php");
+  CHECK(parts.lpszUrlPath >= url.c_str() && parts.lpszUrlPath < url.c_str() + url.size());
+
+  std::memset(&parts, 0, sizeof(parts));
+  parts.dwStructSize = sizeof(parts);
+  CHECK(InternetCrackUrl(L"http://localhost", 0, 0, &parts) && parts.nScheme == INTERNET_SCHEME_HTTP &&
+        parts.nPort == INTERNET_DEFAULT_HTTP_PORT);
+  wchar_t small[4];
+  uc.lpszHostName = small;
+  uc.dwHostNameLength = 4;
+  CHECK(!InternetCrackUrl(url.c_str(), 0, 0, &uc) && GetLastError() == ERROR_INSUFFICIENT_BUFFER &&
+        uc.dwHostNameLength == 20);
+  CHECK(!InternetCrackUrl(L"meos.example.org/list", 0, 0, &parts) && GetLastError() == ERROR_INTERNET_UNRECOGNIZED_SCHEME);
+  CHECK(!InternetCrackUrl(L"http://host:99999/", 0, 0, &parts) && GetLastError() == ERROR_INTERNET_INVALID_URL);
+
+  const HINTERNET session = InternetOpen(L"MeOS", INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
+  CHECK(session != nullptr);
+  DWORD timeoutMs = 600000;
+  CHECK(InternetSetOption(session, INTERNET_OPTION_RECEIVE_TIMEOUT, &timeoutMs, sizeof(timeoutMs)));
+  CHECK(InternetOpenUrl(session, L"http://localhost/x", nullptr, 0, INTERNET_FLAG_DONT_CACHE, 0) == nullptr &&
+        GetLastError() == ERROR_INTERNET_CANNOT_CONNECT);
+  DWORD responseError = 1, responseLength = 16;
+  wchar_t response[16] = L"x";
+  CHECK(InternetGetLastResponseInfo(&responseError, response, &responseLength) && response[0] == 0 &&
+        responseLength == 0);
+
+  const HINTERNET connection = InternetConnect(session, L"localhost", 80, nullptr, nullptr, INTERNET_SERVICE_HTTP, 0, 0);
+  CHECK(connection != nullptr);
+  CHECK(HttpOpenRequest(session, L"POST", L"/", HTTP_VERSION, nullptr, nullptr, 0, 0) == nullptr &&
+        GetLastError() == ERROR_INTERNET_INCORRECT_HANDLE_TYPE);
+  const HINTERNET request = HttpOpenRequest(connection, L"POST", L"/", HTTP_VERSION, nullptr, nullptr, 0, 0);
+  CHECK(request != nullptr);
+  INTERNET_BUFFERS buffers;
+  std::memset(&buffers, 0, sizeof(buffers));
+  buffers.dwStructSize = sizeof(buffers);
+  CHECK(!HttpSendRequestEx(request, &buffers, nullptr, 0, 0) && GetLastError() == ERROR_INTERNET_CANNOT_CONNECT);
+  DWORD status = 0, statusLength = sizeof(status);
+  CHECK(!HttpQueryInfo(request, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &status, &statusLength, nullptr));
+  DWORD read = 7;
+  char data[8];
+  CHECK(!InternetReadFile(request, data, sizeof(data), &read) && read == 0);
+
+  CHECK(InternetCloseHandle(request) && InternetCloseHandle(connection) && InternetCloseHandle(session));
+  CHECK(!InternetCloseHandle(session) && GetLastError() == ERROR_INVALID_HANDLE);
+  // Other handles are no internet handles.
+  CHECK(!InternetCloseHandle(nullptr));
 }
 
 } // namespace
@@ -428,11 +692,14 @@ int main() {
   testUtf8();
   testCodePages();
   testTime();
+  testDosTimes();
   testPathsAndIntegers();
   testFiles();
   testThreads();
   testSerialPort();
   testSockets();
+  testAdapters();
+  testInternet();
 
   if (failures) {
     std::fprintf(stderr, "%d check(s) failed\n", failures);

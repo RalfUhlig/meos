@@ -52,7 +52,7 @@ protected:
   pControl start = nullptr;
   pControl finish = nullptr;
 
-  static const int dataSize = 128;
+  static const int dataSize = 128 * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
 
   BYTE oData[dataSize];

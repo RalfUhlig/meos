@@ -57,7 +57,7 @@ protected:
   vector<pRunner> Runners;
   void setRunnerInternal(int k, pRunner r);
 
-  static const int dataSize = 256;
+  static const int dataSize = 256 * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
   BYTE oData[dataSize];
   BYTE oDataOld[dataSize];

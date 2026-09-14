@@ -28,6 +28,7 @@ public:
   int wakeDescriptor() const { return wakeEvent; }
 
   std::atomic<bool> finished{false};
+  std::atomic<DWORD> exitCode{0};
 
 private:
   std::atomic<bool> cancelRequested{false};

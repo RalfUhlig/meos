@@ -859,6 +859,36 @@ void testFileDialogs() {
 }
 
 /* ---------------------------------------------------------------------
+   Special folders (getUserFile and getDesktopFile in meos.cpp)
+   --------------------------------------------------------------------- */
+
+void testSpecialFolders() {
+  QTemporaryDir temp;
+  const QByteArray previous = qgetenv("XDG_DATA_HOME");
+  const bool hadPrevious = qEnvironmentVariableIsSet("XDG_DATA_HOME");
+  const QString data = temp.path() + QStringLiteral("/data");
+  qputenv("XDG_DATA_HOME", QFile::encodeName(data));
+
+  wchar_t path[MAX_PATH] = L"x";
+  // A folder that does not exist is only returned when it may be created.
+  CHECK(!SHGetSpecialFolderPath(nullptr, path, CSIDL_APPDATA, FALSE) && path[0] == 0);
+  CHECK(SHGetSpecialFolderPath(nullptr, path, CSIDL_APPDATA, TRUE));
+  CHECK(path == data.toStdWString() && QDir(data).exists());
+  CHECK(SHGetSpecialFolderPath(nullptr, path, CSIDL_APPDATA, FALSE) && path == data.toStdWString());
+  CHECK(!SHGetSpecialFolderPath(nullptr, path, 0x0026 /* CSIDL_PROGRAM_FILES */, TRUE));
+  CHECK(!SHGetSpecialFolderPath(nullptr, nullptr, CSIDL_APPDATA, TRUE));
+  // The desktop and the documents folder may be missing on a build machine, but when
+  // they are returned they exist.
+  if (SHGetSpecialFolderPath(nullptr, path, CSIDL_DESKTOPDIRECTORY, FALSE))
+    CHECK(QDir(QString::fromStdWString(path)).exists());
+
+  if (hadPrevious)
+    qputenv("XDG_DATA_HOME", previous);
+  else
+    qunsetenv("XDG_DATA_HOME");
+}
+
+/* ---------------------------------------------------------------------
    Popup menus
    --------------------------------------------------------------------- */
 
@@ -1090,6 +1120,7 @@ int main(int argc, char **argv) {
   testClipboard();
   testMessageBox();
   testFileDialogs();
+  testSpecialFolders();
   testMenus();
   testShellExecute();
   testScreen();

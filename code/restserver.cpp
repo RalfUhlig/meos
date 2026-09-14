@@ -88,7 +88,7 @@ public:
   RestServer &getServer() const { return *server; }
 };
 
-static void method_handler(const shared_ptr< restbed::Session > session) {
+void method_handler(const shared_ptr< restbed::Session > session) {
   RestServer &server = dynamic_cast<const MeOSResource &>(*session->get_resource()).getServer();
   server.handleRequest(session);
 }
@@ -402,7 +402,7 @@ void RestServer::computeInternal(oEvent &ref, shared_ptr<RestServer::EventReques
     auto fields = ref.getExtraFields(oEvent::ExtraFieldContext::QuickEntry);
     
     vector<pair<string, wstring>> fn;
-    auto makeUpper = [](string& v) -> string& {
+    auto makeUpper = [](string v) -> string {
       for (char& c : v)
         c = toupper(c);
       return v;
@@ -433,7 +433,7 @@ void RestServer::computeInternal(oEvent &ref, shared_ptr<RestServer::EventReques
         wstring par = wideParam(imageId) + L".png";
         getUserFile(fn, par.c_str());
         ifstream fin;
-        fin.open(fn, ios::binary);
+        fin.open(meosPath(fn), ios::binary);
         if (fin.good()) {
           fin.seekg(0, ios::end);
           int p2 = (int)fin.tellg();
@@ -546,7 +546,7 @@ void RestServer::getData(oEvent &oe, const string &what, const multimap<string, 
 
     oe.exportIOFSplits(oEvent::IOF30, exportFile.c_str(), false, useUTC, cls, preferredIdTypes, L"",
                        - 1, true, false, false, true, false, false);
-    ifstream fin(exportFile.c_str());
+    ifstream fin(meosPath(exportFile));
     string rbf;
     while (std::getline(fin, rbf)) {
       answer += rbf;
@@ -563,7 +563,7 @@ void RestServer::getData(oEvent &oe, const string &what, const multimap<string, 
     tuple<string, string, bool> preferredIdTypes("","",true);
 
     oe.exportIOFStartlist(oEvent::IOF30, exportFile.c_str(), useUTC, cls, preferredIdTypes, false, true, false, false);
-    ifstream fin(exportFile.c_str());
+    ifstream fin(meosPath(exportFile));
     string rbf;
     while (std::getline(fin, rbf)) {
       answer += rbf;

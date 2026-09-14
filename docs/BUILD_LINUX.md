@@ -1,9 +1,9 @@
 # Building MeOS on Linux
 
-The native Linux port is work in progress. At the moment the platform independent core
-(`meos_core`), the Win32 compatibility layer (`meos_platform`), the first part of the Qt based
-window layer (`meos_win32ui`) and their tests build on Linux; the GUI, networking and hardware
-support follow in later stages. The packages below cover all stages,
+The native Linux port is work in progress. At the moment every MeOS source except the application
+frame (`meos.cpp`) builds and links on Linux against the Win32 compatibility layer
+(`code/platform`, POSIX and Qt 6), together with a GUI workbench (`meos_gui_workbench`) and the
+tests; the MeOS application itself, networking and hardware support follow in later stages. The packages below cover all stages,
 so that they only need to be installed once.
 
 ## Tested environment
@@ -27,20 +27,27 @@ sudo apt install build-essential cmake ninja-build pkg-config \
 | `ninja-build` | Generator used by all presets | now | 1.11.1 |
 | `pkg-config` | Locating minizip and MariaDB | now | 1.8.1 |
 | `qt6-base-dev` | GUI backend, printing, clipboard | stage 1 | Qt 6.4.2 |
-| `libhpdf-dev` | PDF export (libharu) | stage 1 | 2.3.0 |
-| `libpng-dev` | Images | stage 1 | 1.6.43 |
-| `zlib1g-dev`, `libminizip-dev` | ZIP backups | stage 1 | zlib 1.3, minizip 1.3.0 |
-| `libmariadb-dev`, `libmariadb-dev-compat` | MySQL/MariaDB server connection; the compat package provides `mysql/mysql.h` as used by the code | stage 2 | client 3.3.17 |
+| `libhpdf-dev` | PDF export (libharu) | now | 2.3.0 |
+| `libpng-dev` | Images | now | 1.6.43 |
+| `zlib1g-dev`, `libminizip-dev` | ZIP backups | now | zlib 1.3, minizip 1.3.0 |
+| `libmariadb-dev`, `libmariadb-dev-compat` | MySQL/MariaDB server connection (linked now, used from stage 2) | now | client 3.3.17 (MariaDB 10.11.14 packages) |
 | `libcurl4-openssl-dev` | HTTP(S) access (replaces WinInet) | stage 2 | 8.5.0 |
-| `libasio-dev`, `libssl-dev` | Prerequisites of RestBed (REST server) | stage 2 | asio 1.28.1, OpenSSL 3.0.13 |
+| `libasio-dev` | Prerequisite of RestBed (REST server), built into MeOS | now | asio 1.28.1 |
+| `libssl-dev` | TLS for HTTP(S) access | stage 2 | OpenSSL 3.0.13 |
 | `qt6-multimedia-dev` | Sound output | stage 3 | Qt 6.4.2 |
 
 Notes:
 
-- RestBed is not packaged. It will be built from source as part of the MeOS build in stage 2;
-  only its prerequisites are listed above.
+- **RestBed** is not packaged. CMake downloads RestBed 4.6 (the release whose headers are in
+  `code/restbed`) and the kashmir headers it needs from GitHub when configuring, checks their
+  SHA-256 and builds RestBed against the system asio (`code/cmake/RestBed.cmake`). The first
+  configure therefore needs network access. Offline, unpack the two archives named in that file and
+  pass `-DFETCHCONTENT_SOURCE_DIR_MEOS_RESTBED=<dir> -DFETCHCONTENT_SOURCE_DIR_MEOS_KASHMIR=<dir>`.
+  RestBed is built without its own SSL support; MeOS serves plain HTTP.
 - `libmysqlclient-dev` can be used instead of the two MariaDB packages, but not together with them.
-  The MariaDB client connects to MariaDB and MySQL servers.
+  CMake looks for the pkg-config module `libmariadb` first, then `mysqlclient`. The MariaDB client
+  connects to MariaDB and MySQL servers. The code is compiled against the MySQL headers in
+  `code/mysql`; the test `mysql_api_check` verifies that they match the header of the library found.
 - When configuring a project that uses Qt, CMake may print `Could NOT find XKB`. The message is
   harmless; installing `libxkbcommon-dev` silences it.
 - All versions in the table were checked on 2026-09-11 with a CMake project that finds and links
@@ -84,8 +91,23 @@ cmake --preset linux-debug   && cmake --build --preset linux-debug   && ctest --
 cmake --preset linux-release && cmake --build --preset linux-release && ctest --preset linux-release
 ```
 
-The tests need no display: the window layer test runs with Qt's `offscreen` platform plugin, which
+The tests need no display: the window layer tests run with Qt's `offscreen` platform plugin, which
 comes with `qt6-base-dev`.
+
+## GUI workbench
+
+`build/<preset>/code/meos_gui_workbench` shows real MeOS pages (`gdioutput`) without the MeOS
+application frame: all text formats and colours, all controls with their callbacks, common dialogs,
+and a competition in the runner table. It is a tool for checking the port, not part of a MeOS
+installation.
+
+```bash
+cd <folder with sportident.cardsystem>   # from a MeOS installation; the runner table needs it
+build/linux-debug/code/meos_gui_workbench [competition.meos] [-page 1|2|3]
+```
+
+Without a file, page 3 shows a built-in demo competition. Settings are kept in
+`~/.local/share/MeOS Workbench`.
 
 Debug builds use AddressSanitizer and UBSan (switch off with `-DMEOS_SANITIZE=OFF`); Release builds
 use `-O2 -g` with link-time optimization. Build output goes to `build/<preset>`.

@@ -1,5 +1,5 @@
 // Linux port: stand-in for the Windows SDK header <mmsystem.h>.
-// PlaySound is implemented by the platform sound backend (stage 3, Qt Multimedia).
+// PlaySound is in code/platform/qt/win32_sound.cpp; it plays nothing until stage 3 (Qt Multimedia).
 #pragma once
 
 #include "windows.h"

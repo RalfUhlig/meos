@@ -60,8 +60,10 @@ typedef WORD          *LPWORD;
 typedef BOOL          *LPBOOL;
 typedef int            INT;
 typedef std::uint16_t  USHORT;
+typedef unsigned char  UCHAR;
 typedef std::size_t    SIZE_T;
 typedef void          *PVOID;
+typedef ULONG         *PULONG;
 
 // From rpcndr.h, which windows.h includes.
 typedef unsigned char  byte;
@@ -259,6 +261,9 @@ void GetSystemTime(LPSYSTEMTIME st);
 BOOL SystemTimeToFileTime(const SYSTEMTIME *st, LPFILETIME ft);
 BOOL FileTimeToSystemTime(const FILETIME *ft, LPSYSTEMTIME st);
 BOOL FileTimeToLocalFileTime(const FILETIME *fileTime, LPFILETIME localFileTime);
+BOOL LocalFileTimeToFileTime(const FILETIME *localFileTime, LPFILETIME fileTime);
+BOOL DosDateTimeToFileTime(WORD fatDate, WORD fatTime, LPFILETIME fileTime);
+BOOL FileTimeToDosDateTime(const FILETIME *fileTime, LPWORD fatDate, LPWORD fatTime);
 BOOL SystemTimeToTzSpecificLocalTime(const TIME_ZONE_INFORMATION *timeZone, const SYSTEMTIME *universalTime,
                                      LPSYSTEMTIME localTime);
 BOOL TzSpecificLocalTimeToSystemTime(const TIME_ZONE_INFORMATION *timeZone, const SYSTEMTIME *localTime,
@@ -284,7 +289,9 @@ int GetTimeFormatA(LCID locale, DWORD flags, const SYSTEMTIME *time, LPCSTR form
 #define ERROR_BUFFER_OVERFLOW     111
 #define ERROR_DISK_FULL           112
 #define ERROR_INSUFFICIENT_BUFFER 122
+#define ERROR_DIR_NOT_EMPTY       145
 #define ERROR_ALREADY_EXISTS      183
+#define ERROR_DIRECTORY           267
 #define ERROR_CANCELLED           1223
 
 #define GENERIC_READ  0x80000000UL
@@ -318,6 +325,21 @@ HANDLE CreateFile(LPCWSTR fileName, DWORD access, DWORD shareMode, LPSECURITY_AT
 BOOL CloseHandle(HANDLE handle);
 BOOL DeleteFile(LPCWSTR fileName);
 BOOL CopyFile(LPCWSTR existingFileName, LPCWSTR newFileName, BOOL failIfExists);
+#define INVALID_FILE_SIZE ((DWORD)0xFFFFFFFF)
+DWORD GetFileSize(HANDLE file, LPDWORD fileSizeHigh);
+BOOL CreateDirectory(LPCWSTR pathName, LPSECURITY_ATTRIBUTES security);
+// The folder for temporary files ($TMPDIR or /tmp), with a trailing separator.
+DWORD GetTempPath(DWORD bufferLength, LPWSTR buffer);
+// With unique == 0 creates an empty file <path>/<prefix, 3 characters><hex>.TMP.
+UINT GetTempFileName(LPCWSTR pathName, LPCWSTR prefixString, UINT unique, LPWSTR tempFileName);
+// Only the executable of the process (module == NULL).
+DWORD GetModuleFileName(HMODULE module, LPWSTR fileName, DWORD size);
+BOOL RemoveDirectory(LPCWSTR pathName);
+// The creation time is the status change time; Linux file systems keep no portable birth time.
+BOOL GetFileTime(HANDLE file, LPFILETIME creationTime, LPFILETIME lastAccessTime, LPFILETIME lastWriteTime);
+// The creation time cannot be set and is ignored.
+BOOL SetFileTime(HANDLE file, const FILETIME *creationTime, const FILETIME *lastAccessTime,
+                 const FILETIME *lastWriteTime);
 DWORD GetFileAttributes(LPCWSTR fileName);
 DWORD GetCurrentDirectory(DWORD bufferLength, LPWSTR buffer);
 BOOL SetCurrentDirectory(LPCWSTR path);

@@ -838,7 +838,7 @@ void OnlineInput::processPunchesSICenter(oEvent &oe, const wstring& filename) {
 
 	time_t epoch_abs = getZeroTimeMSLinuxEpoch(oe);
 
-	std::wifstream file(filename);
+	std::wifstream file(meosPath(filename));
 	if (!file.is_open())
 		return;
 

@@ -165,12 +165,12 @@ oDataInfo &oDataContainer::addVariable(oDataInfo &odi) {
 }
 
 int oDataContainer::hash(const char *name) {
-  int res = 0;
+  unsigned res = 0;
   while(*name != 0) {
     res = 31 * res + *name;
     name++;
   }
-  return res;
+  return int(res);
 }
 
 oDataInfo *oDataContainer::findVariable(const char *name) {
