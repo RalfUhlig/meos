@@ -856,7 +856,12 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
       if (gdi.getData("RunnerId", rid) && rid > 0) {
         r = gEvent->getRunner(rid, 0);
 
-        if (r && r->getCard() && multipleStarts && stringMatch(r->getName(), name)) {
+        // The name list is filled with getUIName, which is "Ek, Anna" in the last name
+        // first modes, while getName is always "Anna Ek". Accept either spelling: matching
+        // only getName would skip this branch in those modes and drop the operator on the
+        // overwrite question instead, which is the one destructive answer.
+        if (r && r->getCard() && multipleStarts &&
+            (stringMatch(r->getName(), name) || stringMatch(r->getUIName(), name))) {
           SICard copy = activeSIC;
           gdi.restore();
           activeSIC.clear(0);
