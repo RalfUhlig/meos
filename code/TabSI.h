@@ -54,6 +54,12 @@ private:
   void checkMoreCardsInQueue(gdioutput &gdi);
 
   pRunner autoMatch(const SICard &sic, pRunner db_r);
+
+  /** The entry of the most recent race among those sharing a card number: the highest
+      entry number within one and the same name, ties broken by the latest finish time.
+      Returns nullptr when the number belongs to nobody that has been read out. */
+  pRunner findAdditionalRaceSource(const SICard &sic) const;
+
   void processPunchOnly(gdioutput &gdi, const SICard &sic);
   void startInteractive(gdioutput &gdi, const SICard &sic,
                         pRunner r, pRunner db_r);

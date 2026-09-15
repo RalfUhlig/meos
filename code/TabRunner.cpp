@@ -264,8 +264,17 @@ void TabRunner::selectRunner(gdioutput &gdi, pRunner r) {
     }
   }
 
+  // Item 0 of the course list stands for "the course of the class", so it has to be named
+  // after the class. oRunner::getCourse hands out the runner's own course as soon as one is
+  // set, and the entry would then claim the class had that course. Only ask the class when
+  // the runner has a course of their own -- otherwise getCourse already resolves the class
+  // course, forking included, which oClass::getCourse cannot do without the runner.
+  pClass virtCls = r->getClassRef(true);
+  pCourse classCrs = r->getCourseId() == 0 ? r->getCourse(false)
+                                           : (virtCls ? virtCls->getCourse(false) : nullptr);
+
   auto [defCrsName, crsId] = getClassCourseDescription(r->getClassRef(false), r->getLegNumber(), 
-                                                       r->getClassRef(true), r->getCourse(false),
+                                                       virtCls, classCrs,
                                                        r->getCourseId());
 
   oe->fillCourses(gdi, "RCourse", { make_pair(L"X", 0)}, true);
