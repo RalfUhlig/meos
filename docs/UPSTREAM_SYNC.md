@@ -106,7 +106,7 @@ cmake --preset linux-debug && cmake --build --preset linux-debug && ctest --pres
 
 | Date | Upstream drop | Conflicts and resolution |
 |---|---|---|
-| — | — | No upstream drop merged into `linux` yet; the port started from MeOS 5.0 Update 1. |
+| 2026-09-15 | MeOS 5.0 Update 2 and 3 (`11dbad7`) | The port started from MeOS 5.0 Update 1. No conflicts: the drop touches `localizer.cpp`, `MeosSQL.cpp` and `TabRunner.cpp`, which the port also edits, but in other places; no source files added or removed. Merged into `port/qt-backend` as well; Debug and Release build and pass `ctest` on both branches. `LocalizerInternal::tl()` no longer checks `implBase` for null, so programs without `meos.cpp` must load a language first (the workbench's `app_frame.cpp` does). |
 
 ## Keeping bugfix branches current for upstream PRs
 
