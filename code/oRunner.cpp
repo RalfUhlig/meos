@@ -2016,9 +2016,10 @@ bool oRunner::storeTimesAux(pClass targetClass) {
     int rt = getRunningTime(true);
     pCourse pCrs = getCourse(false);
     if (pCrs && rt > 0) {
-      map<int, int>::iterator res = targetClass->tBestTimePerCourse.find(pCrs->getId());
+      int crsId = pCrs->getResultCourseId();
+      map<int, int>::iterator res = targetClass->tBestTimePerCourse.find(crsId);
       if (res == targetClass->tBestTimePerCourse.end()) {
-        targetClass->tBestTimePerCourse[pCrs->getId()] = rt;
+        targetClass->tBestTimePerCourse[crsId] = rt;
         updated = true;
       }
       else if (rt < res->second) {
@@ -2245,9 +2246,10 @@ bool oRunner::operator<(const oRunner &c) const {
     RunnerStatus stat = getStatusComputed(false);
     RunnerStatus cstat = c.getStatusComputed(false);
 
-    if (crs1 != crs2) {
-      int id1 = crs1 ? crs1->getId() : 0;
-      int id2 = crs2 ? crs2->getId() : 0;
+    int id1 = crs1 ? crs1->getResultCourseId() : 0;
+    int id2 = crs2 ? crs2->getResultCourseId() : 0;
+
+    if (id1 != id2) {
       return id1 < id2;
     }
     else if (tDuplicateLeg != c.tDuplicateLeg)
@@ -2440,9 +2442,10 @@ bool oRunner::operator<(const oRunner &c) const {
     RunnerStatus stat = getStatusComputed(false);
     RunnerStatus cstat = c.getStatusComputed(false);
 
-    if (crs1 != crs2) {
-      int id1 = crs1 ? crs1->getId() : 0;
-      int id2 = crs2 ? crs2->getId() : 0;
+    int id1 = crs1 ? crs1->getResultCourseId() : 0;
+    int id2 = crs2 ? crs2->getResultCourseId() : 0;
+
+    if (id1 != id2) {
       return id1 < id2;
     }
     else if (stat != cstat)
@@ -2466,9 +2469,10 @@ bool oRunner::operator<(const oRunner &c) const {
   else if (oe->CurrentSortOrder == CourseStartTime) {
     const pCourse crs1 = getCourse(false);
     const pCourse crs2 = c.getCourse(false);
-    if (crs1 != crs2) {
-      int id1 = crs1 ? crs1->getId() : 0;
-      int id2 = crs2 ? crs2->getId() : 0;
+    int id1 = crs1 ? crs1->getResultCourseId() : 0;
+    int id2 = crs2 ? crs2->getResultCourseId() : 0;
+
+    if (id1 != id2) {
       return id1 < id2;
     }
     else if (tStartTime != c.tStartTime)
@@ -4766,7 +4770,7 @@ int oRunner::getTimeAfterCourse(bool considerClass) const {
     return -1;
   int bt;
   if (considerClass)
-    bt = Class->getBestTimeCourse(oClass::AllowRecompute::Yes, crs->getId());
+    bt = Class->getBestTimeCourse(oClass::AllowRecompute::Yes, crs->getResultCourseId());
   else
     bt = crs->getBestTime();
 

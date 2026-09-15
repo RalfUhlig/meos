@@ -341,11 +341,11 @@ void oEvent::calculateRunnerResults(ResultType resultType,
     int clsId = it->getClassId(true);
     if (classCourseResults) {
       const pCourse crs = it->getCourse(false);
-      groupId = it->getClassId(true) * 997 + (crs ? crs->getId() : 0);
+      groupId = it->getClassId(true) * 997 + (crs ? crs->getResultCourseId() : 0);
     }
     else if (courseResults) {
       const pCourse crs = it->getCourse(false);
-      groupId = crs ? crs->getId() : 0;
+      groupId = crs ? crs->getResultCourseId() : 0;
     }
     else {
       groupId = clsId * 100 + (it->tDuplicateLeg + 10 * it->tLegEquClass);

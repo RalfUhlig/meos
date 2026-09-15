@@ -887,6 +887,11 @@ public:
   bool supportSubSeconds() const;
   void supportSubSeconds(bool use);
 
+  /** Course families (courses named family:name) form a single course
+      when results are computed, ranked and grouped.
+      Controlled by MeOSFeatures::MergeCourseVariants.*/
+  bool mergeCourseFamilies() const;
+
   struct ResultEvent {
     ResultEvent() {}
     ResultEvent(pRunner r, int time, int control, RunnerStatus status):

@@ -79,6 +79,10 @@ protected:
 
   DataRevisionCache<int> bestTime;
 
+  // Id of the course representing this course's family when families are merged,
+  // otherwise the course's own id.
+  DataRevisionCache<int> resultCourseId;
+
   DataRevisionCache<int> maxRGPoints;
   /** Get internal data buffers for DI */
   oDataContainer &getDataBuffers(pvoid &data, pvoid &olddata, pvectorstr &strData) const;
@@ -241,7 +245,15 @@ public:
   
   /** Split the name (family:name) into family and name*/
   void getNameAndFamily(wstring& name, wstring& family) const;
-  
+
+  /** The family part of the name, or the whole name for a course without family*/
+  wstring getFamilyName() const;
+
+  /** Id used to group results. When the competition merges course families, all
+      courses of one family share the id of the family's first course. Otherwise
+      the course's own id. Never use this to identify a course.*/
+  int getResultCourseId() const;
+
   int getLength() const {return length;}
   wstring getLengthS() const;
 

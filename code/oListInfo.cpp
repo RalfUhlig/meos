@@ -1008,6 +1008,18 @@ const wstring &oEvent::formatSpecialStringAux(const oPrintPost &pp, const oListP
       }
     break;
 
+    case lRunnerCourseFamily:
+      // The name of the group the course is ranked within: the family when
+      // variants are merged, the course itself when they are not. Following the
+      // actual grouping keeps a list consistent whether or not merging is on.
+      if (pc) {
+        if (mergeCourseFamilies())
+          wcsncpy_s(bfw, pc->getFamilyName().c_str(), 256);
+        else
+          wsptr = &pc->getName();
+      }
+    break;
+
     case lCourseNumber:
     case lTeamCourseNumber:
       if (pc) {
@@ -1392,6 +1404,7 @@ const wstring &oEvent::formatListStringAux(const oPrintPost &pp, const oListPara
     case lCourseLength:
     case lCourseName:
     case lRunnerCourse:
+    case lRunnerCourseFamily:
     case lCourseNumber:
       if (r) {
         pCourse crs = r->getCourse(false);

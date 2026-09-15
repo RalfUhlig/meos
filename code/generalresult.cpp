@@ -279,7 +279,7 @@ template<class T> void GeneralResult::sort(vector<T *> &rt, SortOrder so) const 
     }
     else if (ps == CourseWise) {
       oRunner *r = dynamic_cast<oRunner *>(rt[k]);
-      arr[k].first = r && r->getCourse(false) ? r->getCourse(false)->getId() : 0;
+      arr[k].first = r && r->getCourse(false) ? r->getCourse(false)->getResultCourseId() : 0;
     }
     arr[k].second = rt[k];
     int ord = 0;
