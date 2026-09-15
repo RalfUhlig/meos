@@ -7,15 +7,16 @@ reference and not part of anything intended to go back upstream.
 ## Branches
 
 - **`master`** — a pure mirror of `upstream/master`. No own commits, only fast-forward merges
-  from `upstream`. Serves as the clean starting point for feature branches meant to be
+  from `upstream`. Serves as the clean starting point for bugfix branches meant to be
   contributed back to the original project.
-- **`local`** — the version actually in use day to day. Contains `master` plus all personal
-  changes (including this file). Developed on an ongoing basis.
-- **`localdev`** — branched off `local`; carries further personal changes that are not (yet) in
+- **`local`** — the version actually in use day to day. Contains `master`, the bugfixes and all
+  personal features (plus this file). Developed on an ongoing basis.
+- **`bugfix/*`** (e.g. `bugfix/si-card-readout`) — fixes of upstream behaviour, branched off
+  `master` and kept ready for a pull request against `melinsoftware/meos`: nothing that adds
+  capability, and one concern per commit so single fixes can be left out. Merged into `local`.
+- **`feature/*`** (e.g. `feature/additional-race`) — personal features, not intended for
+  upstream. Branched off `local` (or off the feature they build on) and merged back into
   `local`.
-- **`feature/*`** (e.g. `feature/second-race-entry`) — self-contained features branched off
-  `master`, intended for a pull request against `melinsoftware/meos`. Merged into `local`, but
-  kept clean of unrelated `local`-only changes.
 - **`linux`** — integration branch of the native Linux port (plan and status:
   `plans/linux-port.md`). Currently based on `master`, i.e. upstream plus the port without
   `local`-only changes. Merges `master` after every upstream release.
@@ -25,6 +26,23 @@ reference and not part of anything intended to go back upstream.
 The port's work branches are called `port/*`, not `linux/*`: Git cannot have a branch `linux` and
 branches below `linux/` at the same time, because `linux` would have to be both a file and a
 directory under `refs/heads`.
+
+### Branches that were given up
+
+Removed branches are kept as annotated `archive/*` tags, so their commits stay reachable.
+
+On 2026-09-15 `local` was rebuilt from `master`. Features used to branch off `master` for
+possible upstream PRs while also building on each other in `local`, and the same conflicts had
+to be resolved again and again. The rebuilt `local` merges `feature/course-family-results`,
+`feature/additional-race` (which carries both bugfix branches) and `feature/duplicate-runner`,
+and no longer contains the abandoned second race entry.
+
+| Tag | Was |
+|---|---|
+| `archive/local-2026-09-15` | `local` before the rebuild |
+| `archive/duplicate-runner-2026-09-15` | `feature/duplicate-runner` and `localdev` before the rebuild |
+| `archive/second-race-entry` | `feature/second-race-entry`, superseded by `feature/additional-race` |
+| `archive/cleanup-remove-second-race-entry` | its removal, obsolete with the rebuild |
 
 ### Open: how `linux` and `local` relate
 
@@ -90,17 +108,18 @@ cmake --preset linux-debug && cmake --build --preset linux-debug && ctest --pres
 |---|---|---|
 | — | — | No upstream drop merged into `linux` yet; the port started from MeOS 5.0 Update 1. |
 
-## Keeping feature branches current for upstream PRs
+## Keeping bugfix branches current for upstream PRs
 
-To bring a feature branch up to date with a newer `master` (without pulling in `local`-only
+To bring a bugfix branch up to date with a newer `master` (without pulling in `local`-only
 changes):
 
 ```bash
-git checkout feature/my-feature
+git checkout bugfix/my-fix
 git merge master
 ```
 
 ## New personal changes
 
-Changes that are *not* meant for an upstream PR are committed directly on `local`, or in their
-own branches merged into `local` — not on `master`.
+Features are branched off `local` and merged back into it; small changes go directly on
+`local`. Never on `master`, and never on a `bugfix/*` branch. To bring an open feature branch up
+to date, merge `local` into it.
