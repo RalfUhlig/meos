@@ -86,6 +86,7 @@ void TabRunner::enableControlButtons(gdioutput &gdi, bool enable, bool vacant)
     gdi.enableInput("Save");
     gdi.enableInput("Undo");
     gdi.enableInput("EditAnnotation");
+    gdi.enableInput("Duplicate", true);
     if (vacant) {
       gdi.disableInput("Move", true);
       gdi.disableInput("NoStart", true);
@@ -100,6 +101,7 @@ void TabRunner::enableControlButtons(gdioutput &gdi, bool enable, bool vacant)
     gdi.disableInput("Save");
     gdi.disableInput("Undo");
     gdi.disableInput("EditAnnotation");
+    gdi.disableInput("Duplicate", true);
     gdi.disableInput("Move", true);
     gdi.disableInput("NoStart", true);
   }
@@ -1114,6 +1116,25 @@ int TabRunner::runnerCB(gdioutput &gdi, GuiEventType type, BaseInfo* data) {
         clsId = oe->getFirstClassId(false);
 
       r->setClassId(clsId, true);
+
+      fillRunnerList(gdi);
+      oe->fillClubs(gdi, "Club");
+      selectRunner(gdi, r);
+      gdi.setInputFocus("Name", true);
+    }
+    else if (bi.id == "Duplicate") {
+      if (runnerId == 0)
+        return 0;
+
+      save(gdi, runnerId, true);
+
+      pRunner src = oe->getRunner(runnerId, 0);
+      if (!src)
+        return 0;
+
+      // classId 0 keeps the class of the source runner. A runner specific course belongs to
+      // the copy as well; getCourseId is 0 when the course comes from the class.
+      pRunner r = oe->addSecondRaceEntry(src->getMultiRunner(0), 0, src->getCourseId());
 
       fillRunnerList(gdi);
       oe->fillClubs(gdi, "Club");
@@ -3536,6 +3557,8 @@ bool TabRunner::loadPage(gdioutput &gdi)
   gdi.popX();
   gdi.addButton("Remove", "Radera", RunnerCB);
   gdi.addButton("Add", "Ny deltagare", RunnerCB);
+  gdi.addButton("Duplicate", L"Duplicera", RunnerCB,
+                L"Skapa en ny anmälan för samma person, för ytterligare ett lopp med samma bricka.");
   gdi.popX();
   gdi.dropLine(2.2);
   gdi.addButton("EditAnnotation", L"Kommentar >>", RunnerCB, L"Lägg till eller redigera kommentarer om deltagaren.");
