@@ -48,15 +48,50 @@ const wstring &fromUTF(const string &input) {
   return output;
 }
 
-class LocalizerImpl
-{
+class LocalizerImpl {
   wstring language;
   map<wstring, wstring> table;
   map<wstring, wstring> unknown;
+  wstring lastUnknown;
+  constexpr static int bfzSize = 23;
+  unsigned int bfzIx = 0;
+  vector<wstring> bfz;
   void loadTable(const vector<string> &raw, const wstring &language);
   mutable oWordList *givenNames;
 
+  wstring &getNewString() {
+    if (bfz.empty())
+      bfz.resize(bfzSize);
+
+    bfzIx++;
+    if (bfzIx >= bfz.size())
+      bfzIx = 0;
+
+    bfz[bfzIx].clear();
+    return bfz[bfzIx];
+  }
+
   void addUnknown(const wstring& var);
+
+  pair<const wstring *, bool> translateInner(const wstring &key) {
+    auto it = table.find(key);
+    if (it != table.end())
+      return make_pair(&it->second, true);
+
+    if (!key.empty() && key.front() == '(' && key.back() == ')') {
+      wstring sk = key.substr(1, key.length() - 2);
+      it = table.find(sk);
+      if (it != table.end()) {
+        wstring &out = getNewString(); // Not thread safe
+        out = L"(" + it->second + L")";
+        return make_pair(&out, true);
+      }
+    }
+    return make_pair(&key, key.empty());
+  }
+
+  /**Note: Not threadsafe. Uses static data. */
+  const wstring &translateAux(const wstring &str, bool &found);
 
 public:
 
@@ -78,16 +113,14 @@ public:
   ~LocalizerImpl(void);
 };
 
-Localizer::LocalizerInternal::LocalizerInternal(void)
-{
+Localizer::LocalizerInternal::LocalizerInternal(void) {
   impl = new LocalizerImpl();
   implBase = 0;
   owning = true;
   user = 0;
 }
 
-Localizer::LocalizerInternal::~LocalizerInternal(void)
-{
+Localizer::LocalizerInternal::~LocalizerInternal(void) {
   if (user) {
     user->owning = true;
     impl = 0;
@@ -140,7 +173,7 @@ LocalizerImpl::~LocalizerImpl(void)
 const wstring &Localizer::LocalizerInternal::tl(const wstring &str) const {
   bool found;
   const wstring *ret = &impl->translate(str, found);
-  if (found || !implBase)
+  if (found)
     return *ret;
 
   ret = &implBase->translate(str, found);
@@ -155,20 +188,27 @@ bool Localizer::LocalizerInternal::has(const string &str) const {
 }
 
 const wstring &LocalizerImpl::translate(const wstring &str, bool &found) {
+  auto &res = translateAux(str, found);
+
+  if (!found && !lastUnknown.empty())
+    addUnknown(lastUnknown);
+
+  return res;
+}
+
+const wstring &LocalizerImpl::translateAux(const wstring &str, bool &found) {
   found = false;
-  static int i = 0;
-  const int bsize = 17;
-  static wstring value[bsize];
   int len = str.length();
 
-  if (len==0)
-    return _EmptyWString;
-
-  if (str[0]=='#') {
-    i = (i + 1)%bsize;
-    value[i] = str.substr(1);
+  if (len == 0) {
     found = true;
-    return value[i];
+    return _EmptyWString;
+  }
+  if (str[0]=='#') {
+    auto &value = getNewString();
+    value = str.substr(1);
+    found = true;
+    return value;
   }
   auto isDigit = [](wchar_t c) {
     return c >= '0' && c <= '9';
@@ -176,29 +216,28 @@ const wstring &LocalizerImpl::translate(const wstring &str, bool &found) {
 
   if (str[0]==',' || str[0]==' ' || str[0]=='.'
        || str[0]==':'  || str[0]==';' || str[0]=='<' || str[0]=='>' 
-       || str[0]=='-' || str[0]==0x96 || str[0]=='×' || isDigit(str[0]) || str[0] == '(') {
+       || str[0]=='-' || str[0]==0x96 || str[0]=='×' || isDigit(str[0])) {
     unsigned k=1;
     while(str[k] && (str[k]==' ' || str[k]=='.' || str[k]==':' || str[k]=='<' || str[k]=='>'
-           || str[k]=='-' || str[k]==0x96 || str[k] == '×' || isDigit(str[k]) || str[k] == '('))
+           || str[k]=='-' || str[k]==0x96 || str[k] == '×' || isDigit(str[k])))
       k++;
 
-    if (k<str.length()) {
+    if (k <= str.length()) {
       wstring sub = str.substr(k);
-      i = (i + 1)%bsize;
-      value[i] = str.substr(0, k) + translate(sub, found);
-      return value[i];
+      auto &value = getNewString();
+      value = str.substr(0, k) + translateAux(sub, found);
+      return value;
     }
   }
 
-  map<wstring, wstring>::const_iterator it = table.find(str);
-  if (it != table.end()) {
+  if (auto res = translateInner(str); res.second) {
     found = true;
-    return it->second;
+    return *res.first;
   }
 
   int subst = str.find_first_of('#');
   if (subst != str.npos) {
-    wstring s = translate(str.substr(0, subst), found);
+    wstring s = translateAux(str.substr(0, subst), found);
     vector<wstring> split_vec;
     split(str.substr(subst+1), L"#", split_vec);
     split_vec.push_back(L"");
@@ -223,31 +262,31 @@ const wstring &LocalizerImpl::translate(const wstring &str, bool &found) {
     if (lastpos<s.size())
       ret += s.substr(lastpos);
 
-    i = (i + 1)%bsize;
-    swap(value[i], ret);
-    return value[i];
+    auto &value = getNewString();
+    swap(value, ret);
+    return value;
   }
   else if (str[0] == '@') {
     // Untranslated string with substitution
-    i = (i + 1) % bsize;
-    value[i] = str.substr(1);
+    auto &value = getNewString();
+    value = str.substr(1);
     found = true;
-    return value[i];
+    return value;
   }
 
-  
   wchar_t last = str[len-1];
   if (last != ':' && last != '.' && last != ' ' && last != ',' &&
       last != ';' && last != '<' && last != '>' && last != '-' &&
-      last != 0x96 && last != 215 && !isDigit(last) && last != ')') {
-#ifdef _DEBUG
-    if (str.length()>1)
-      addUnknown(str);
-#endif
+      last != 0x96 && last != 215 && !isDigit(last)) {
     found = false;
-    i = (i + 1)%bsize;
-    value[i] = str;
-    return value[i];
+    if (str.length() > 1)
+      lastUnknown = str;
+    else
+      lastUnknown.clear(); //Ignore symbols etc
+
+    auto &value = getNewString();
+    value = str;
+    return value;
   }
 
   wstring suffix;
@@ -257,7 +296,7 @@ const wstring &LocalizerImpl::translate(const wstring &str, bool &found) {
     wchar_t last = str[pos];
     if (last != ':' && last != ' ' && last != ',' && last != '.' &&
         last != ';' && last != '<' && last != '>' && last != '-' && 
-        last != 0x96 && last != 215 && !isDigit(last) && last != ')')
+        last != 0x96 && last != 215 && !isDigit(last))
       break;
 
     pos = str.find_last_not_of(last, pos);
@@ -266,22 +305,22 @@ const wstring &LocalizerImpl::translate(const wstring &str, bool &found) {
   suffix = str.substr(pos+1);
 
   wstring key = str.substr(0, str.length()-suffix.length());
-  it = table.find(key);
-  if (it != table.end()) {
-    i = (i + 1)%bsize;
-    value[i] = it->second + suffix;
+
+  if (auto res = translateInner(key); res.second) {
+    auto &value = getNewString();
+    value = *res.first + suffix;
     found = true;
-    return value[i];
+    return value;
   }
-#ifdef _DEBUG
-  if (key.length() > 1 && _wtoi(key.c_str()) == 0)
-    addUnknown(key);
-#endif
 
   found = false;
-  i = (i + 1)%bsize;
-  value[i] = str;
-  return value[i];
+  if (str.length() > 1)
+    lastUnknown = str;
+  else
+    lastUnknown.clear(); // Ignore symbols etc
+  auto &value = getNewString();
+  value = str;
+  return value;
 }
 
 void LocalizerImpl::addUnknown(const wstring& key) {
@@ -338,8 +377,6 @@ const oWordList &LocalizerImpl::getGivenNames() const {
   return *givenNames;
 }
 
-#ifndef MEOSDB
-
 void Localizer::LocalizerInternal::loadLangResource(const wstring &name) {
   map<wstring,wstring>::iterator it = langResource.find(name);
   if (it == langResource.end())
@@ -375,7 +412,7 @@ void LocalizerImpl::translateAll(const LocalizerImpl &all) {
   map<wstring, wstring>::const_iterator it;
   bool f;
   for (it = all.table.begin(); it != all.table.end(); ++it) {
-    translate(it->first, f);
+    translateAux(it->first, f);
     if (!f) {
       unknown[it->first] = it->second;
     }
@@ -546,18 +583,19 @@ void LocalizerImpl::loadTable(const vector<string> &raw, const wstring &language
     else {
       const wstring &wkey = fromUTF(key);
       const wstring &wvalue = fromUTF(value);
-      if (wkey.front() != '(' || wkey.back() != ')' || wvalue.front() != '(' || wvalue.back() != ')')
-        table[wkey] = wvalue;
-      else
+      
+      bool begin = wkey.front() == '(' && wvalue.front() == '(';
+      bool end = wkey.back() == ')' && wvalue.back() == ')';
+
+      if (begin && end)
         table[wkey.substr(1, wkey.length() - 2)] = wvalue.substr(1, wvalue.length() - 2);
+      else
+        table[wkey] = wvalue;
     }
   }
 }
 
-#endif
-
-void LocalizerImpl::clear()
-{
+void LocalizerImpl::clear() {
   table.clear();
   unknown.clear();
   language.clear();

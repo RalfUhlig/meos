@@ -25,17 +25,17 @@
 
 //AB
 int getMeosBuild() {
-  string revision("$Rev: 1633 $");
+  string revision("$Rev: 1677 $");
   return 174 + atoi(revision.substr(5, string::npos).c_str());
 }
 
 wstring getMeosDate() {
-  wstring date(L"$Date: 2026-07-06 14:20:02 +0200 (mån, 06 jul 2026) $");
+  wstring date(L"$Date: 2026-09-12 09:12:27 +0200 (lör, 12 sep 2026) $");
   return date.substr(7,10);
 }
 
 wstring getBuildType() {
-  return L"U1"; // No parantheses (...)
+  return L"U3"; // No parantheses (...)
 }
 
 wstring getMajorVersion() {
@@ -130,7 +130,6 @@ void getSupporters(vector<wstring>& supp, vector<wstring>& developSupp){
   supp.emplace_back(L"Ligue PACA");
   developSupp.emplace_back(L"Sävedalens AIK");
   supp.emplace_back(L"Kamil Pipek, OK Lokomotiva Pardubice");
-  supp.emplace_back(L"Autidó");
   supp.emplace_back(L"Tjalve OK");
   supp.emplace_back(L"TV Jahn Wolfsburg");
   developSupp.emplace_back(L"Malmö OK");
@@ -138,7 +137,6 @@ void getSupporters(vector<wstring>& supp, vector<wstring>& developSupp){
   supp.emplace_back(L"Enebybergs IF");
   supp.emplace_back(L"IK Vikings OK");
   supp.emplace_back(L"Naturfreunde Wien Orienteering");
-  supp.emplace_back(L"HEYRIES / ACA Aix en Provence");
   supp.emplace_back(L"Allerød OK");
   supp.emplace_back(L"IF Thor");
   supp.emplace_back(L"OK Rodhen");
@@ -163,6 +161,9 @@ void getSupporters(vector<wstring>& supp, vector<wstring>& developSupp){
   supp.emplace_back(L"IFK Linköpings OS");
   developSupp.emplace_back(L"Alfta-Ösa OK");
   developSupp.emplace_back(L"OK Vilse 87");
-
+  supp.emplace_back(L"HEYRIES / ACA Aix en Provence");
+  supp.emplace_back(L"Autidó");
+  supp.emplace_back(L"Vallentuna-Össeby OL");
+  
   reverse(supp.begin(), supp.end());
 }

@@ -2202,7 +2202,7 @@ void TabRunner::teamReport(oEvent& oe, gdioutput& gdi,
       int nextLeg = leg;
       while (++nextLeg < t->getNumRunners()) {
         int legNrN, legOrdN;
-        cls->splitLegNumberParallel(leg, legNrN, legOrdN);
+        cls->splitLegNumberParallel(nextLeg, legNrN, legOrdN);
         if (legNrN == legNr + 1) {
           nextR = t->getRunner(nextLeg);
           nextSelected = nextR && selectedRunners.count(nextR->getId());
