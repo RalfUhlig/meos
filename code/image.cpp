@@ -97,8 +97,10 @@ tuple<HBITMAP, uint8_t*, bool> Image::read_png(vector<uint8_t> &&inData, int &wi
     return tuple(nullptr, nullptr, false);
 
   png_infop info = png_create_info_struct(png);
-  if (!info) 
+  if (!info) {
+    png_destroy_read_struct(&png, nullptr, nullptr);
     return tuple(nullptr, nullptr, false);
+  }
 
   png_set_read_fn(png, &inputStream, readDataFromInputStream);
 
@@ -213,6 +215,7 @@ tuple<HBITMAP, uint8_t*, bool> Image::read_png(vector<uint8_t> &&inData, int &wi
       }
     }
   }
+  png_destroy_read_struct(&png, &info, nullptr);
   return tuple(hbmp, dst, hasAlpha);
 }
 

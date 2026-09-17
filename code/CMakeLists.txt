@@ -246,6 +246,16 @@ if(NOT WIN32)
   meos_apply_settings(meos_gui_workbench)
   meos_link_meos(meos_gui_workbench)
 
+  # Builds every page and writes its screenshot and layout (stage 1.2.7). The only
+  # test that runs real gdioutput pages; the files are meant for the comparison with
+  # a Windows run (docs/BUILD_LINUX.md).
+  add_test(NAME workbench_shot
+           COMMAND meos_gui_workbench -shot "${CMAKE_CURRENT_BINARY_DIR}/workbench_shot/linux")
+  set_tests_properties(workbench_shot PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/workbench_shot_data"
+    TIMEOUT 300)
+  file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/workbench_shot")
+
   # Load test of the core (stage 1.2.6): competition file round trip, results, result
   # list, ZIP archive. XDG_DATA_HOME keeps its settings inside the build tree.
   add_executable(meos_core_load_test platform/qt/tests/core_load_test.cpp)
@@ -340,14 +350,55 @@ if(WIN32)
     Msimg32 comctl32 odbc32 odbccp32 winmm ws2_32 wininet
     zlibstat libharu RestBed libpng libmysql)
 
-  # Runtime DLLs next to MeOS.exe. Debug then overwrites them with the debug builds
+  # Runtime DLLs next to the program. Debug then overwrites them with the debug builds
   # from dll_debug; in Release the second command copies the release DLLs again.
   file(GLOB meos_release_dlls "${CMAKE_CURRENT_SOURCE_DIR}/dll64/*.dll")
   file(GLOB meos_debug_dlls "${CMAKE_CURRENT_SOURCE_DIR}/dll_debug/*.dll")
-  add_custom_command(TARGET meos POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${meos_release_dlls} "$<TARGET_FILE_DIR:meos>"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "$<IF:$<CONFIG:Debug>,${meos_debug_dlls},${meos_release_dlls}>" "$<TARGET_FILE_DIR:meos>"
-    COMMAND_EXPAND_LISTS
-    VERBATIM)
+  function(meos_copy_runtime_dlls target)
+    add_custom_command(TARGET ${target} POST_BUILD
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${meos_release_dlls} "$<TARGET_FILE_DIR:${target}>"
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+              "$<IF:$<CONFIG:Debug>,${meos_debug_dlls},${meos_release_dlls}>" "$<TARGET_FILE_DIR:${target}>"
+      COMMAND_EXPAND_LISTS
+      VERBATIM)
+  endfunction()
+  meos_copy_runtime_dlls(meos)
+
+  # The GUI workbench with MSVC (stage 1.2.7): the same program as on Linux, so that
+  # the pages can be compared side by side (platform/qt/workbench/workbench.cpp, which
+  # uses the Win32 API and gdioutput only). It replaces meos.cpp by app_frame.cpp.
+  # Not part of a MeOS installation.
+  set(MEOS_WORKBENCH_MEOS_SOURCES ${MEOS_WIN32_SOURCES})
+  list(REMOVE_ITEM MEOS_WORKBENCH_MEOS_SOURCES meos.cpp)
+  add_executable(meos_gui_workbench WIN32
+    ${MEOS_UI_SOURCES} ${MEOS_NET_SOURCES} ${MEOS_WORKBENCH_MEOS_SOURCES}
+    platform/qt/workbench/app_frame.cpp
+    platform/qt/workbench/demo_competition.cpp
+    platform/qt/workbench/workbench.cpp
+    meos.rc meoslang.rc "${CMAKE_CURRENT_BINARY_DIR}/meos_dpi.manifest")
+  meos_apply_settings(meos_gui_workbench)
+  target_include_directories(meos_gui_workbench PRIVATE platform/qt/workbench)
+  target_link_directories(meos_gui_workbench PRIVATE
+    "$<IF:$<CONFIG:Debug>,${CMAKE_CURRENT_SOURCE_DIR}/lib64_db,${CMAKE_CURRENT_SOURCE_DIR}/lib64>")
+  target_link_libraries(meos_gui_workbench PRIVATE
+    meos_core
+    Msimg32 comctl32 odbc32 odbccp32 winmm ws2_32 wininet
+    zlibstat libharu RestBed libpng libmysql)
+  meos_copy_runtime_dlls(meos_gui_workbench)
+
+  # The text metrics of real GDI, the reference for the Qt backend. The test compares
+  # a fresh measurement with the checked in one (platform/qt/tests/gdi_metrics.cpp).
+  add_executable(meos_gdi_metrics WIN32 platform/qt/tests/gdi_metrics.cpp)
+  meos_apply_settings(meos_gdi_metrics)
+  target_link_libraries(meos_gdi_metrics PRIVATE user32 gdi32)
+  add_test(NAME gdi_metrics COMMAND meos_gdi_metrics "${CMAKE_CURRENT_BINARY_DIR}/gdi_metrics_run.csv")
+  set_tests_properties(gdi_metrics PROPERTIES FIXTURES_SETUP gdi_metrics_csv)
+
+  add_executable(meos_gdi_metrics_compare platform/qt/tests/gdi_metrics_compare.cpp)
+  meos_apply_settings(meos_gdi_metrics_compare)
+  add_test(NAME gdi_metrics_compare
+           COMMAND meos_gdi_metrics_compare "${CMAKE_CURRENT_BINARY_DIR}/gdi_metrics_run.csv"
+                   "${CMAKE_CURRENT_SOURCE_DIR}/platform/qt/tests/gdi_metrics_windows.csv" "Arial" "Times New Roman"
+                   "Lucida Console" "Segoe UI")
+  set_tests_properties(gdi_metrics_compare PROPERTIES FIXTURES_REQUIRED gdi_metrics_csv SKIP_RETURN_CODE 77)
 endif()

@@ -17,7 +17,9 @@
 #include <QFontDatabase>
 #include <QFontInfo>
 #include <QFontMetrics>
+#include <QGuiApplication>
 #include <QRawFont>
+#include <QScreen>
 #include <QtEndian>
 
 #include <algorithm>
@@ -114,6 +116,18 @@ const OriginalFace *originalFace(const std::wstring &lowerFaceName) {
   return entry == faces.end() ? nullptr : &entry->second;
 }
 
+// Whether the advances may be rounded to whole pixels, as GDI does. Qt then hints
+// the outlines at the pixel size asked for, but draws them at the size of the
+// screen: on a scaled screen the glyphs of a word no longer fill their advance and
+// the word falls apart ("w ith"). There the outlines are hinted vertically only.
+bool roundedAdvances() {
+  static const bool rounded = [] {
+    const QScreen *screen = QGuiApplication::primaryScreen();
+    return !screen || qFuzzyCompare(screen->devicePixelRatio(), qreal(1));
+  }();
+  return rounded;
+}
+
 bool isInstalled(const QString &family) {
   static std::mutex mutex;
   static std::map<QString, bool> known;
@@ -136,6 +150,8 @@ struct DesignMetrics {
   int lineDescent = 0;
   int lineGap = 0;
   int boundsWidth = 0;
+  // Whether the face carries TrueType hinting instructions.
+  bool hinted = false;
   // The VDMX table, which maps cell heights to pixel sizes.
   QByteArray vdmx;
 };
@@ -179,6 +195,7 @@ DesignMetrics designMetrics(const QFont &font) {
     const QByteArray head = raw.fontTable("head");
     metrics.boundsWidth = readS16(head, 40) - readS16(head, 36);
     metrics.vdmx = raw.fontTable("VDMX");
+    metrics.hinted = !raw.fontTable("fpgm").isEmpty() || !raw.fontTable("prep").isEmpty();
     if (metrics.winAscent + metrics.winDescent <= 0) {
       metrics.winAscent = metrics.lineAscent;
       metrics.winDescent = -metrics.lineDescent;
@@ -645,6 +662,11 @@ std::shared_ptr<Font> meos_qt::createFont(const LOGFONT &logFont) {
   // A substitute for a known missing face gets the cell proportions of the
   // original, so that sizes and line heights stay those of Windows.
   const DesignMetrics design = designMetrics(font);
+  // Without hinting instructions FreeType's own hinter moves the stems and rounds
+  // the advances up, which tears words apart in the same way; hinting the outlines
+  // vertically only keeps the shapes and the spacing of the design.
+  if (!design.hinted || !roundedAdvances())
+    font.setHintingPreference(QFont::PreferVerticalHinting);
   const int cellUnits = design.winAscent + design.winDescent;
   const int height = logFont.lfHeight ? logFont.lfHeight : 16;
   const std::wstring lowerFace = lowerCase(face);

@@ -17,7 +17,14 @@
 //   3. a competition (the file given on the command line, or a built-in demo) with
 //      the runner table (sort, edit, copy to the clipboard).
 //
-// Usage: meos_gui_workbench [competition file] [-page N]
+// Usage: meos_gui_workbench [competition file] [-page N] [-shot <prefix>]
+// With -shot the program shows every page in a window of a fixed size, writes the
+// canvas as <prefix>-page<N>.bmp and the geometry of the controls as
+// <prefix>-page<N>.csv, and exits without waiting for input. Both files can be
+// compared with those of a Windows run (docs/BUILD_LINUX.md, stage 1.2.7). As under
+// Windows, the pixels of a window are read back with BitBlt, which shows what
+// gdioutput draws; the child windows of the controls are not part of it, so their
+// position and size go into the CSV file.
 // Settings go to the folder "MeOS Workbench" in the user's application data folder.
 // Like MeOS, the program reads installation files (sportident.cardsystem, needed by
 // the runner table) from the current folder; start it in a MeOS installation folder.
@@ -25,6 +32,9 @@
 #include "stdafx.h"
 
 #include <cstdio>
+#include <cstdint>
+#include <fstream>
+#include <vector>
 
 #include "app_frame.h"
 #include "demo_competition.h"
@@ -395,6 +405,178 @@ void loadPage(gdioutput &gdi, Page page) {
   gdi.refresh();
 }
 
+/* ---------------------------------------------------------------------
+   Screenshots and layout dump (-shot), for the comparison with Windows
+   --------------------------------------------------------------------- */
+
+// The canvas size used for screenshots. Fixed, because the client area of a window
+// of a given outer size differs between the window managers.
+constexpr int shotWidth = 1080;
+constexpr int shotHeight = 760;
+
+void putLittleEndian(std::vector<unsigned char> &out, std::uint32_t value, int bytes) {
+  for (int i = 0; i < bytes; i++)
+    out.push_back(static_cast<unsigned char>((value >> (8 * i)) & 0xFF));
+}
+
+// Reads the pixels of a window back with BitBlt and writes them as a 24-bit BMP file
+// (bottom-up, as a BMP is normally stored).
+bool writeBitmap(const std::wstring &file, HWND window) {
+  RECT client = {0, 0, 0, 0};
+  if (!GetClientRect(window, &client))
+    return false;
+  const int width = client.right - client.left;
+  const int height = client.bottom - client.top;
+  if (width <= 0 || height <= 0)
+    return false;
+
+  BITMAPINFO info = {};
+  info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  info.bmiHeader.biWidth = width;
+  info.bmiHeader.biHeight = -height; // top-down, the only kind the Linux layer keeps
+  info.bmiHeader.biPlanes = 1;
+  info.bmiHeader.biBitCount = 32;
+  info.bmiHeader.biCompression = BI_RGB;
+
+  HDC windowDC = GetDC(window);
+  void *bits = nullptr;
+  HBITMAP bitmap = CreateDIBSection(windowDC, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+  HDC memoryDC = CreateCompatibleDC(windowDC);
+  bool ok = bitmap != nullptr && memoryDC != nullptr;
+  if (ok) {
+    HGDIOBJ previous = SelectObject(memoryDC, bitmap);
+    ok = BitBlt(memoryDC, 0, 0, width, height, windowDC, 0, 0, SRCCOPY) != FALSE;
+    SelectObject(memoryDC, previous);
+  }
+  if (ok) {
+    const int rowSize = (3 * width + 3) & ~3;
+    std::vector<unsigned char> header;
+    header.push_back('B');
+    header.push_back('M');
+    putLittleEndian(header, std::uint32_t(14 + 40 + rowSize * height), 4);
+    putLittleEndian(header, 0, 4);
+    putLittleEndian(header, 14 + 40, 4);
+    putLittleEndian(header, 40, 4);
+    putLittleEndian(header, std::uint32_t(width), 4);
+    putLittleEndian(header, std::uint32_t(height), 4);
+    putLittleEndian(header, 1, 2);
+    putLittleEndian(header, 24, 2);
+    putLittleEndian(header, 0, 4); // BI_RGB
+    putLittleEndian(header, std::uint32_t(rowSize * height), 4);
+    putLittleEndian(header, 0, 4);
+    putLittleEndian(header, 0, 4);
+    putLittleEndian(header, 0, 4);
+    putLittleEndian(header, 0, 4);
+
+    std::ofstream out(meosPath(file), std::ios::binary);
+    out.write(reinterpret_cast<const char *>(header.data()), std::streamsize(header.size()));
+    const auto *pixels = static_cast<const unsigned char *>(bits);
+    std::vector<unsigned char> row(std::size_t(rowSize), 0);
+    for (int y = height - 1; y >= 0; y--) {
+      const unsigned char *source = pixels + std::size_t(y) * std::size_t(width) * 4;
+      for (int x = 0; x < width; x++) {
+        row[std::size_t(3 * x)] = source[4 * x];         // blue
+        row[std::size_t(3 * x + 1)] = source[4 * x + 1]; // green
+        row[std::size_t(3 * x + 2)] = source[4 * x + 2]; // red
+      }
+      out.write(reinterpret_cast<const char *>(row.data()), rowSize);
+    }
+    ok = out.good();
+  }
+  if (memoryDC)
+    DeleteDC(memoryDC);
+  if (bitmap)
+    DeleteObject(bitmap);
+  ReleaseDC(window, windowDC);
+  return ok;
+}
+
+// The controls of each page, in the order they are created.
+const std::vector<std::string> &pageWidgets(Page page) {
+  static const std::vector<std::string> navigation = {"PageText", "PageControls", "PageTable"};
+  static const std::vector<std::string> controls = {
+      "PageText", "PageControls", "PageTable", "Name", "Time", "Password", "Notes", "Class", "Club",
+      "List", "Multi", "Check", "Push", "Ask", "Alert", "Info", "Warning", "Open", "Save", "Folder",
+      "Color", "Clear"};
+  static const std::vector<std::string> table = {"PageText", "PageControls", "PageTable",
+                                                 "OpenCompetition", "Demo"};
+  switch (page) {
+  case Page::Controls:
+    return controls;
+  case Page::Table:
+    return table;
+  default:
+    return navigation;
+  }
+}
+
+// Writes what cannot be read from the screenshot: the measures of the page and the
+// position and size of every control (its window is not part of the canvas).
+bool writeLayout(const std::wstring &file, gdioutput &gdi, Page page) {
+  std::ofstream out(meosPath(file));
+  if (!out)
+    return false;
+  out << "kind,id,x,y,width,height,text\n";
+  out << "page," << int(page) << ",0,0," << gdi.getWidth() << ',' << gdi.getHeight() << ",scale "
+      << gdi.getScale() << " line " << gdi.getLineHeight() << '\n';
+
+  for (const std::string &id : pageWidgets(page)) {
+    if (!gdi.hasWidget(id))
+      continue;
+    const HWND control = gdi.getBaseInfo(id).getControlWindow();
+    RECT rect = {0, 0, 0, 0};
+    if (!control || !GetWindowRect(control, &rect))
+      continue;
+    POINT corner = {rect.left, rect.top};
+    ScreenToClient(hWndWorkspace, &corner);
+    wchar_t text[256] = {0};
+    GetWindowText(control, text, 256);
+    std::wstring value(text);
+    for (wchar_t &character : value) {
+      if (character == L',' || character == L'\n' || character == L'\r')
+        character = L' ';
+    }
+    // UTF-8, so that the files of both platforms are byte-identical.
+    out << "control," << id << ',' << corner.x << ',' << corner.y << ',' << rect.right - rect.left << ','
+        << rect.bottom - rect.top << ',' << gdioutput::toUTF8(value) << '\n';
+  }
+  return out.good();
+}
+
+// Shows every page in a canvas of a fixed size and writes the files.
+int writeShots(const std::wstring &prefix) {
+  MoveWindow(hWndWorkspace, 0, 0, shotWidth, shotHeight, TRUE);
+  int failures = 0;
+  for (int number = int(Page::Text); number <= int(Page::Table); number++) {
+    const Page page = Page(number);
+    loadPage(*gdi_main, page);
+    UpdateWindow(hWndWorkspace);
+    const std::wstring name = prefix + L"-page" + itow(number);
+    if (!writeBitmap(name + L".bmp", hWndWorkspace)) {
+      std::fprintf(stderr, "cannot write the screenshot of page %d\n", number);
+      failures++;
+    }
+    if (!writeLayout(name + L".csv", *gdi_main, page)) {
+      std::fprintf(stderr, "cannot write the layout of page %d\n", number);
+      failures++;
+    }
+  }
+  return failures;
+}
+
+// Cuts an option and its argument out of the command line and returns the argument.
+std::string takeOption(std::string &commandLine, const char *option) {
+  const std::string pattern = std::string(option) + " ";
+  const size_t start = commandLine.find(pattern);
+  if (start == std::string::npos)
+    return "";
+  const size_t argument = start + pattern.size();
+  const size_t end = commandLine.find_first_of(' ', argument);
+  const std::string value = commandLine.substr(argument, end == std::string::npos ? end : end - argument);
+  commandLine.erase(start, end == std::string::npos ? end : end - start);
+  return value;
+}
+
 LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
   switch (message) {
     case WM_SIZE:
@@ -419,12 +601,13 @@ LRESULT CALLBACK MainWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpCmdLine, int nCmdShow) {
   Page startPage = Page::Text;
   std::string commandLine = lpCmdLine ? lpCmdLine : "";
-  const size_t pageOption = commandLine.find("-page ");
-  if (pageOption != std::string::npos) {
-    int number = atoi(commandLine.c_str() + pageOption + 6);
+  const std::string shotOption = takeOption(commandLine, "-shot");
+  const std::string pageNumber = takeOption(commandLine, "-page");
+  const bool pageGiven = !pageNumber.empty();
+  if (pageGiven) {
+    const int number = atoi(pageNumber.c_str());
     if (number >= 1 && number <= 3)
       startPage = Page(number);
-    commandLine.erase(pageOption, commandLine.find_first_of(' ', pageOption + 6) - pageOption);
   }
   commandLine = trim(commandLine);
   if (commandLine.size() > 1 && commandLine.front() == '"' && commandLine.back() == '"')
@@ -435,7 +618,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpC
     int length = MultiByteToWideChar(CP_ACP, 0, commandLine.c_str(), int(commandLine.size()), &wide[0],
                                      int(wide.size()));
     competitionFile = wide.substr(0, std::max(length, 0));
-    if (pageOption == std::string::npos)
+    if (!pageGiven)
       startPage = Page::Table;
   }
 
@@ -476,6 +659,15 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPSTR lpC
   gdi_main->setFont(gEvent->getPropertyInt("TextSize", 0), gEvent->getPropertyString("UIFont", L"Segoe UI"));
   gdi_main->init(hWndWorkspace, hWndMain, NULL);
   image.loadImage(IDI_MEOSEDIT, Image::ImageMethod::Default);
+
+  if (!shotOption.empty()) {
+    std::wstring prefix(shotOption.size() + 1, L'\0');
+    const int length = MultiByteToWideChar(CP_ACP, 0, shotOption.c_str(), int(shotOption.size()), &prefix[0],
+                                           int(prefix.size()));
+    const int failures = writeShots(prefix.substr(0, std::max(length, 0)));
+    app_frame::shutdown();
+    return failures ? 1 : 0;
+  }
 
   loadPage(*gdi_main, startPage);
   SetTimer(hWndMain, interfaceTimer, 100, 0);

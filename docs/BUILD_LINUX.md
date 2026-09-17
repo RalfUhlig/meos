@@ -15,9 +15,10 @@ Other distributions have not been tested; package names refer to Ubuntu/Debian.
 
 ```bash
 sudo apt install build-essential cmake ninja-build pkg-config \
-  qt6-base-dev qt6-multimedia-dev \
+  qt6-base-dev qt6-multimedia-dev libxkbcommon-dev \
   libhpdf-dev libpng-dev zlib1g-dev libminizip-dev \
-  libmariadb-dev libmariadb-dev-compat libcurl4-openssl-dev libasio-dev libssl-dev
+  libmariadb-dev libmariadb-dev-compat libcurl4-openssl-dev libasio-dev libssl-dev \
+  fonts-dejavu-core fonts-liberation ttf-mscorefonts-installer
 ```
 
 | Package | Needed for | Needed from | Verified version |
@@ -26,7 +27,8 @@ sudo apt install build-essential cmake ninja-build pkg-config \
 | `cmake` | Build system; at least 3.25 (presets version 6) | now | 3.28.3 |
 | `ninja-build` | Generator used by all presets | now | 1.11.1 |
 | `pkg-config` | Locating minizip and MariaDB | now | 1.8.1 |
-| `qt6-base-dev` | GUI backend, printing, clipboard | stage 1 | Qt 6.4.2 |
+| `qt6-base-dev` | GUI backend (Qt Widgets, Gui, Core), printing, clipboard, the `offscreen` platform plugin used by the tests | stage 1 | Qt 6.4.2 |
+| `libxkbcommon-dev` | Silences `Could NOT find XKB` while configuring Qt | stage 1 | 1.6.0 |
 | `libhpdf-dev` | PDF export (libharu) | now | 2.3.0 |
 | `libpng-dev` | Images | now | 1.6.43 |
 | `zlib1g-dev`, `libminizip-dev` | ZIP backups | now | zlib 1.3, minizip 1.3.0 |
@@ -35,6 +37,9 @@ sudo apt install build-essential cmake ninja-build pkg-config \
 | `libasio-dev` | Prerequisite of RestBed (REST server), built into MeOS | now | asio 1.28.1 |
 | `libssl-dev` | TLS for HTTP(S) access | stage 2 | OpenSSL 3.0.13 |
 | `qt6-multimedia-dev` | Sound output | stage 3 | Qt 6.4.2 |
+| `fonts-dejavu-core` | Lucida Console (see **Fonts**) | stage 1 | 2.37-8 |
+| `ttf-mscorefonts-installer` | Arial, Times New Roman, Courier New (see **Fonts**) | stage 1 | 3.8.1ubuntu1 |
+| `fonts-liberation` | Metric compatible stand-ins if the Microsoft fonts are not installed | stage 1 | 2.1.5-3 |
 
 Notes:
 
@@ -51,12 +56,35 @@ Notes:
 - When configuring a project that uses Qt, CMake may print `Could NOT find XKB`. The message is
   harmless; installing `libxkbcommon-dev` silences it.
 - All versions in the table were checked on 2026-09-11 with a CMake project that finds and links
-  every package.
-- **Fonts.** MeOS asks for Windows fonts. Arial, Times New Roman and Courier New come from
-  `ttf-mscorefonts-installer` (optional; otherwise the metric compatible Liberation fonts are used).
-  Segoe UI is replaced by Selawik, which is embedded in the build (`code/platform/qt/fonts`, SIL Open
-  Font License); Lucida Console is drawn with DejaVu Sans Mono (`fonts-dejavu-core`, installed with
-  Qt) in the cell size of the original.
+  every package; the font packages on 2026-09-17 with the workbench and `ctest`.
+
+## Fonts
+
+MeOS asks for the fonts of Windows by name. The window layer maps each name to the first family
+installed from a list of its own, and takes the cell heights of the original, so that text keeps the
+size and the line height it has on Windows (`code/platform/qt/win32_text.cpp`). Text widths are
+measured against a Windows run by the test `gdi_metrics_compare`.
+
+| Font MeOS asks for | Used for | On Linux | Package | Verified version |
+|---|---|---|---|---|
+| Segoe UI | the whole user interface (canvas text) | Selawik, embedded in the program | none, `code/platform/qt/fonts` (SIL Open Font License) | Selawik 1.01 |
+| Lucida Console | `monoText`, fixed width lists | DejaVu Sans Mono, in the cell size of the original | `fonts-dejavu-core` | 2.37-8 |
+| Arial, Times New Roman, Courier New | lists, reports and printing | the fonts themselves | `ttf-mscorefonts-installer` | 3.8.1ubuntu1 |
+| MS Shell Dlg (`DEFAULT_GUI_FONT`, the font of the controls at scale 1) | buttons, input fields, lists | Microsoft Sans Serif and Tahoma are not packaged, so Arial is used | `ttf-mscorefonts-installer` | 3.8.1ubuntu1 |
+
+Without `ttf-mscorefonts-installer` (it needs the acceptance of a licence) the metric compatible
+Liberation fonts are used instead: Liberation Sans, Liberation Serif and Liberation Mono from
+`fonts-liberation`. Text is then a few percent wider or narrower than on Windows in places.
+
+Selawik is Microsoft's metric compatible open replacement for Segoe UI; it is embedded as a Qt
+resource and needs no installation. It has no italic style and no hinting tables, so Qt slants it
+itself and the layer hints its outlines vertically only. Segoe UI's own hinting cannot be
+reproduced: text is 2.9 % wider or narrower than on Windows on average (measured over 1,882
+values), and at some sizes the accent of a capital letter reaches one pixel above the cell.
+
+On an unscaled screen the layer rounds text advances to whole pixels, as GDI does. On a scaled
+screen (HiDPI), where Qt draws the glyphs at the size of the screen but would keep those advances,
+it hints the outlines vertically only, so that the letters of a word stay together.
 
 ## System setup
 
@@ -108,6 +136,32 @@ build/linux-debug/code/meos_gui_workbench [competition.meos] [-page 1|2|3]
 
 Without a file, page 3 shows a built-in demo competition. Settings are kept in
 `~/.local/share/MeOS Workbench`.
+
+### Comparing the pages with Windows
+
+The workbench uses the Win32 API and `gdioutput` only, so it builds with MSVC as well: the target
+`meos_gui_workbench` of the `win-debug` and `win-release` presets (the Windows side of the CMake
+build has not been verified yet). `-shot <prefix>` shows every page in a canvas of a fixed size,
+writes it and exits:
+
+```bash
+# writes linux-page1.bmp … linux-page3.csv
+build/linux-debug/code/meos_gui_workbench -shot linux
+
+# the same without a display
+QT_QPA_PLATFORM=offscreen build/linux-debug/code/meos_gui_workbench -shot linux
+```
+
+- `<prefix>-page<N>.bmp` is what `gdioutput` draws, read back from the window with `BitBlt`. As on
+  Windows, the child windows of the controls are not part of it, so page 2 shows its labels only,
+  while pages 1 and 3 (the runner table is drawn by `gdioutput`) are complete. Windows needs the
+  window to be visible for this, so nothing may cover it there.
+- `<prefix>-page<N>.csv` holds the measures of the page and the position and size of every control
+  in UTF-8, which is where differences in control heights show up. The files of two runs can be
+  compared with `diff`, the images with an image viewer or `compare` (ImageMagick).
+
+Both files are byte-identical between the Debug and the Release build and between runs, with and
+without a display.
 
 Debug builds use AddressSanitizer and UBSan (switch off with `-DMEOS_SANITIZE=OFF`); Release builds
 use `-O2 -g` with link-time optimization. Build output goes to `build/<preset>`.
