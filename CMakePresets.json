@@ -107,6 +107,20 @@
       "output": {
         "outputOnFailure": true
       }
+    },
+    {
+      "name": "win-debug",
+      "configurePreset": "win-debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "win-release",
+      "configurePreset": "win-release",
+      "output": {
+        "outputOnFailure": true
+      }
     }
   ]
 }
