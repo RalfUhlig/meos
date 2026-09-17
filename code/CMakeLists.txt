@@ -58,6 +58,18 @@ meos_check_vcxproj_sync("${CMAKE_CURRENT_SOURCE_DIR}/MeOS.vcxproj"
 # Configuration settings (mirror MeOS.vcxproj)
 # ---------------------------------------------------------------------------
 
+# MeOS is built for x64: the prebuilt libraries in code/lib64 and code/lib64_db are
+# x64, and the Ninja presets cannot set the target platform themselves - the compiler
+# comes from the environment of the Developer shell. Stop here instead of letting the
+# linker fail with LNK4272 and every symbol of the prebuilt libraries unresolved.
+if(WIN32 AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+  message(FATAL_ERROR
+    "MeOS builds for x64, but ${CMAKE_CXX_COMPILER} targets ${CMAKE_SIZEOF_VOID_P}-byte pointers.\n"
+    "Configure from an x64 Developer shell: \"x64 Native Tools Command Prompt for VS 2022\", or run "
+    "vcvarsall.bat x64, or in PowerShell Enter-VsDevShell -Arch amd64 -HostArch amd64. "
+    "Delete the build directory afterwards, because the compiler check is cached.")
+endif()
+
 # Release keeps debug information, as MeOS.vcxproj does.
 if(MSVC)
   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug,Release>:ProgramDatabase>")
