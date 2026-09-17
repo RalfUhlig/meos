@@ -31,8 +31,10 @@
 
 #include "stdafx.h"
 
-#include <cstdio>
+#include <algorithm>
 #include <cstdint>
+#include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <vector>
 
@@ -410,9 +412,13 @@ void loadPage(gdioutput &gdi, Page page) {
    --------------------------------------------------------------------- */
 
 // The canvas size used for screenshots. Fixed, because the client area of a window
-// of a given outer size differs between the window managers.
+// of a given outer size differs between the window managers. The main window gets
+// the canvas plus a margin for its frame, so that the canvas lies inside its client
+// area: a child window is clipped to its parent, and Windows has no pixels to read
+// back outside it.
 constexpr int shotWidth = 1080;
 constexpr int shotHeight = 760;
+constexpr int shotFrame = 120;
 
 void putLittleEndian(std::vector<unsigned char> &out, std::uint32_t value, int bytes) {
   for (int i = 0; i < bytes; i++)
@@ -543,36 +549,60 @@ bool writeLayout(const std::wstring &file, gdioutput &gdi, Page page) {
   return out.good();
 }
 
-// Shows every page in a canvas of a fixed size and writes the files.
+// Shows every page in a canvas of a fixed size and writes the files. Returns the
+// number of files it could not write.
 int writeShots(const std::wstring &prefix) {
+  MoveWindow(hWndMain, 0, 0, shotWidth + shotFrame, shotHeight + shotFrame, TRUE);
   MoveWindow(hWndWorkspace, 0, 0, shotWidth, shotHeight, TRUE);
-  int failures = 0;
+
+  // A missing folder is the usual reason why nothing is written.
+  const std::filesystem::path folder = meosPath(prefix).parent_path();
+  if (!folder.empty()) {
+    std::error_code ignored;
+    std::filesystem::create_directories(folder, ignored);
+  }
+
+  std::wstring failed;
   for (int number = int(Page::Text); number <= int(Page::Table); number++) {
     const Page page = Page(number);
     loadPage(*gdi_main, page);
     UpdateWindow(hWndWorkspace);
     const std::wstring name = prefix + L"-page" + itow(number);
-    if (!writeBitmap(name + L".bmp", hWndWorkspace)) {
-      std::fprintf(stderr, "cannot write the screenshot of page %d\n", number);
-      failures++;
-    }
-    if (!writeLayout(name + L".csv", *gdi_main, page)) {
-      std::fprintf(stderr, "cannot write the layout of page %d\n", number);
-      failures++;
-    }
+    if (!writeBitmap(name + L".bmp", hWndWorkspace))
+      failed += name + L".bmp\n";
+    if (!writeLayout(name + L".csv", *gdi_main, page))
+      failed += name + L".csv\n";
   }
-  return failures;
+
+  if (!failed.empty()) {
+    const std::wstring message = L"The workbench could not write these files:\n\n" + failed +
+                                 L"\nThe folder must exist and be writable, and the name must not "
+                                 L"contain a character the file system rejects.";
+    std::fprintf(stderr, "%s\n", gdioutput::toUTF8(message).c_str());
+#ifdef _WIN32
+    // A Win32 program has no console, so the message would be lost otherwise.
+    MessageBox(hWndMain, message.c_str(), L"MeOS Workbench", MB_ICONWARNING | MB_OK);
+#endif
+  }
+  return int(std::count(failed.begin(), failed.end(), L'\n'));
 }
 
 // Cuts an option and its argument out of the command line and returns the argument.
+// The argument ends at the next space, or at the closing quotation mark if it is
+// quoted (a path with spaces).
 std::string takeOption(std::string &commandLine, const char *option) {
   const std::string pattern = std::string(option) + " ";
   const size_t start = commandLine.find(pattern);
   if (start == std::string::npos)
     return "";
-  const size_t argument = start + pattern.size();
-  const size_t end = commandLine.find_first_of(' ', argument);
+  size_t argument = start + pattern.size();
+  const bool quoted = argument < commandLine.size() && commandLine[argument] == '"';
+  if (quoted)
+    argument++;
+  size_t end = commandLine.find_first_of(quoted ? '"' : ' ', argument);
   const std::string value = commandLine.substr(argument, end == std::string::npos ? end : end - argument);
+  if (quoted && end != std::string::npos)
+    end++; // the quotation mark belongs to the option
   commandLine.erase(start, end == std::string::npos ? end : end - start);
   return value;
 }
