@@ -20,7 +20,8 @@
 // Usage: meos_gui_workbench [competition file] [-page N] [-shot <prefix>]
 // With -shot the program shows every page in a window of a fixed size, writes the
 // canvas as <prefix>-page<N>.bmp and the geometry of the controls as
-// <prefix>-page<N>.csv, and exits without waiting for input. Both files can be
+// <prefix>-page<N>.csv, and exits without waiting for input. The prefix may be
+// quoted and may name a folder (ending in a separator), which then holds shot-page<N>. Both files can be
 // compared with those of a Windows run (docs/BUILD_LINUX.md, stage 1.2.7). As under
 // Windows, the pixels of a window are read back with BitBlt, which shows what
 // gdioutput draws; the child windows of the controls are not part of it, so their
@@ -555,8 +556,16 @@ int writeShots(const std::wstring &prefix) {
   MoveWindow(hWndMain, 0, 0, shotWidth + shotFrame, shotHeight + shotFrame, TRUE);
   MoveWindow(hWndWorkspace, 0, 0, shotWidth, shotHeight, TRUE);
 
-  // A missing folder is the usual reason why nothing is written.
-  const std::filesystem::path folder = meosPath(prefix).parent_path();
+  // Quotation marks a shell left in the argument are not allowed in a file name on
+  // Windows, and a prefix that names a folder needs a file name of its own.
+  std::wstring stem = prefix;
+  if (stem.size() > 1 && stem.front() == L'"' && stem.back() == L'"')
+    stem = stem.substr(1, stem.size() - 2);
+  if (stem.empty() || stem.back() == L'\\' || stem.back() == L'/')
+    stem += L"shot";
+
+  // A missing folder is the other usual reason why nothing is written.
+  const std::filesystem::path folder = meosPath(stem).parent_path();
   if (!folder.empty()) {
     std::error_code ignored;
     std::filesystem::create_directories(folder, ignored);
@@ -567,7 +576,7 @@ int writeShots(const std::wstring &prefix) {
     const Page page = Page(number);
     loadPage(*gdi_main, page);
     UpdateWindow(hWndWorkspace);
-    const std::wstring name = prefix + L"-page" + itow(number);
+    const std::wstring name = stem + L"-page" + itow(number);
     if (!writeBitmap(name + L".bmp", hWndWorkspace))
       failed += name + L".bmp\n";
     if (!writeLayout(name + L".csv", *gdi_main, page))
