@@ -163,5 +163,15 @@ QT_QPA_PLATFORM=offscreen build/linux-debug/code/meos_gui_workbench -shot linux
 Both files are byte-identical between the Debug and the Release build and between runs, with and
 without a display.
 
+**How far to take the comparison.** Pixel equality with Windows is not a goal; an intact layout is.
+A few pixels more width or height on Linux are fine as long as nothing collides. Fix what breaks the
+layout: text over other text or over a control, labels that are cut off or ellipsized where Windows
+shows them in full, columns that no longer line up, controls that leave the page or the canvas, line
+breaks in different places, a wrong scroll range, clipped ascenders, descenders or accents. Merely
+record the rest: positions and sizes within ±2 px, a different page height, text widths within the
+measured font tolerance (Arial, Times New Roman, Lucida Console ≤ 0.2 %, Segoe UI through Selawik
+≤ 3 %), antialiasing, hinting, stroke weights and the glyph shapes of the substituted fonts. The CSV
+decides, the BMP is a visual check and never a pass/fail gate.
+
 Debug builds use AddressSanitizer and UBSan (switch off with `-DMEOS_SANITIZE=OFF`); Release builds
 use `-O2 -g` with link-time optimization. Build output goes to `build/<preset>`.
