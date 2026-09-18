@@ -90,6 +90,15 @@ typedef std::int64_t __int64;
 #define __stdcall
 #define __cdecl
 
+// Source annotations (SAL). They document how a parameter is used and have no effect
+// on the generated code; MeOS writes them on the dialog procedures in meos.cpp.
+#define _In_
+#define _In_opt_
+#define _Out_
+#define _Out_opt_
+#define _Inout_
+#define _Inout_opt_
+
 // MSVC's architecture macro. MeOS uses it to add overloads that are only distinct from
 // the size_t ones on 64-bit targets (gdistructures.h).
 #if defined(__x86_64__) && !defined(_M_X64)

@@ -26,6 +26,15 @@
 typedef void (CALLBACK *TIMERPROC)(HWND window, UINT message, UINT_PTR id, DWORD time);
 typedef LRESULT (CALLBACK *HOOKPROC)(int code, WPARAM wParam, LPARAM lParam);
 typedef BOOL (CALLBACK *MONITORENUMPROC)(HMONITOR monitor, HDC dc, LPRECT rect, LPARAM data);
+typedef INT_PTR (CALLBACK *DLGPROC)(HWND dialog, UINT message, WPARAM wParam, LPARAM lParam);
+
+// Header of every WM_NOTIFY notification. MeOS reads it for the tab control
+// (meos.cpp), the only place that receives WM_NOTIFY.
+typedef struct tagNMHDR {
+  HWND     hwndFrom;
+  UINT_PTR idFrom;
+  UINT     code;
+} NMHDR, *LPNMHDR;
 
 typedef struct tagWNDCLASSEXW {
   UINT      cbSize;
@@ -143,10 +152,13 @@ typedef struct tagTPMPARAMS *LPTPMPARAMS;
 #define WM_SETFONT           0x0030
 #define WM_GETFONT           0x0031
 #define WM_WINDOWPOSCHANGED  0x0047
+#define WM_NOTIFY            0x004E
+#define WM_DISPLAYCHANGE     0x007E
 #define WM_NCACTIVATE        0x0086
 #define WM_KEYDOWN           0x0100
 #define WM_KEYUP             0x0101
 #define WM_CHAR              0x0102
+#define WM_INITDIALOG        0x0110
 #define WM_COMMAND           0x0111
 #define WM_TIMER             0x0113
 #define WM_HSCROLL           0x0114
@@ -177,6 +189,11 @@ BOOL GetMessage(LPMSG msg, HWND window, UINT filterMin, UINT filterMax);
 BOOL TranslateMessage(const MSG *msg);
 LRESULT DispatchMessage(const MSG *msg);
 void PostQuitMessage(int exitCode);
+
+// Accelerators (stage 1.3). The main message loop translates the table of meos.rc
+// into WM_COMMAND before dispatching a message (meos.cpp).
+HACCEL LoadAccelerators(HINSTANCE instance, LPCWSTR tableName);
+int TranslateAccelerator(HWND window, HACCEL table, LPMSG msg);
 
 /* ---------------------------------------------------------------------
    Windows and window classes: code/platform/qt/win32_window.cpp
@@ -278,6 +295,7 @@ BOOL GetWindowRect(HWND window, LPRECT rect);
 BOOL ClientToScreen(HWND window, LPPOINT point);
 BOOL ScreenToClient(HWND window, LPPOINT point);
 HWND WindowFromPoint(POINT point);
+BOOL IsChild(HWND parent, HWND window);
 HWND GetDesktopWindow();
 BOOL SetForegroundWindow(HWND window);
 HWND SetActiveWindow(HWND window);
@@ -291,6 +309,7 @@ HWND GetCapture();
    Messages, timers and hooks: code/platform/qt/win32_message.cpp
    --------------------------------------------------------------------- */
 #define WH_KEYBOARD   2
+#define WH_GETMESSAGE 3
 #define WH_CBT        5
 #define HC_ACTION     0
 #define HCBT_ACTIVATE 5
@@ -530,6 +549,11 @@ int DrawText(HDC dc, LPCWSTR text, int length, LPRECT rect, UINT format);
 #define TPM_NONOTIFY  0x0080
 #define TPM_RETURNCMD 0x0100
 
+// Dialogs from a resource template (stage 1.3). MeOS has exactly one: the splash
+// screen of meos.cpp, a template without any control.
+HWND CreateDialog(HINSTANCE instance, LPCWSTR templateName, HWND parent, DLGPROC dialogProc);
+BOOL EndDialog(HWND dialog, INT_PTR result);
+
 int MessageBox(HWND owner, LPCWSTR text, LPCWSTR caption, UINT type);
 inline int MessageBoxW(HWND owner, LPCWSTR text, LPCWSTR caption, UINT type) {
   return MessageBox(owner, text, caption, type);
@@ -568,6 +592,8 @@ UINT RegisterClipboardFormat(LPCWSTR formatName);
 #define SM_CYSCREEN        1
 #define SM_CXEDGE          45
 #define SM_CYEDGE          46
+#define SM_CXSMICON        49
+#define SM_CYSMICON        50
 #define SM_CXVIRTUALSCREEN 78
 #define SM_CYVIRTUALSCREEN 79
 
@@ -592,6 +618,8 @@ UINT RegisterClipboardFormat(LPCWSTR formatName);
 HCURSOR LoadCursor(HINSTANCE instance, LPCWSTR cursorName);
 HCURSOR SetCursor(HCURSOR cursor);
 HBITMAP LoadBitmap(HINSTANCE instance, LPCWSTR bitmapName);
+// The icon of a window class (stage 1.3), from an ICON resource of meos.rc.
+HICON LoadIcon(HINSTANCE instance, LPCWSTR iconName);
 BOOL GetWindowPlacement(HWND window, WINDOWPLACEMENT *placement);
 BOOL SetWindowPlacement(HWND window, const WINDOWPLACEMENT *placement);
 int GetSystemMetrics(int index);

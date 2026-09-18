@@ -185,13 +185,19 @@ if(NOT WIN32)
   meos_apply_settings(meos_si)
 
   # The GDI/window based sources, the tabs and the rest of the Win32 group (stage 1.2),
-  # built against the Win32 declarations in platform/compat/win32. meos.cpp follows in
-  # stage 1.3.
+  # built against the Win32 declarations in platform/compat/win32.
   set(MEOS_LINUX_GUI_SOURCES ${MEOS_WIN32_SOURCES})
   list(REMOVE_ITEM MEOS_LINUX_GUI_SOURCES meos.cpp SportIdent.cpp)
   add_library(meos_gui OBJECT ${MEOS_LINUX_GUI_SOURCES} ${MEOS_UI_SOURCES})
   meos_apply_settings(meos_gui)
   target_link_libraries(meos_gui PUBLIC PNG::PNG ZLIB::ZLIB PkgConfig::MEOS_MINIZIP)
+
+  # The application frame (stage 1.3.1): it compiles against the Win32 declarations,
+  # like meos_si in stage 1.1. The program target follows in 1.3.3, once the tab
+  # control, icons, accelerators and the splash screen are implemented (1.3.2). It
+  # defines the same globals as meos_app_frame, so no program links both.
+  add_library(meos_app OBJECT meos.cpp)
+  meos_apply_settings(meos_app)
 
   # MySQL, REST server, HTTP and online services. They link since stage 1.2 (the tabs
   # need them); WinInet reports no connection until stage 2.

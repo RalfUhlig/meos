@@ -277,6 +277,7 @@ int GetTimeFormatA(LCID locale, DWORD flags, const SYSTEMTIME *time, LPCSTR form
    File system, errors and system information: code/platform/posix/win32_files.cpp
    --------------------------------------------------------------------- */
 #define ERROR_SUCCESS             0
+#define NOERROR                   0
 #define ERROR_FILE_NOT_FOUND      2
 #define ERROR_PATH_NOT_FOUND      3
 #define ERROR_ACCESS_DENIED       5

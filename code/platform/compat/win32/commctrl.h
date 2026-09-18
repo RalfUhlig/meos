@@ -1,8 +1,7 @@
 // Linux port: stand-in for the Windows SDK header <commctrl.h>.
-// The common controls MeOS uses (tooltips, the table toolbar, image lists) are
-// implemented by the Qt backend in code/platform/qt/win32_commctrl.cpp (stage 1.2).
-// The tab control follows with meos.cpp (stage 1.3). Constants have their Windows
-// values.
+// The common controls MeOS uses (tooltips, the table toolbar, image lists and the
+// tab control of the main window) are implemented by the Qt backend in
+// code/platform/qt/win32_commctrl.cpp. Constants have their Windows values.
 
 #pragma once
 
@@ -10,6 +9,15 @@
 
 /* Initialisation */
 void InitCommonControls();
+
+#define ICC_TAB_CLASSES 0x00000008
+
+typedef struct tagINITCOMMONCONTROLSEX {
+  DWORD dwSize;
+  DWORD dwICC;
+} INITCOMMONCONTROLSEX, *LPINITCOMMONCONTROLSEX;
+
+BOOL InitCommonControlsEx(const INITCOMMONCONTROLSEX *controls);
 
 #define CCM_FIRST      0x2000
 #define CCM_SETVERSION (CCM_FIRST + 0x7)
@@ -53,11 +61,13 @@ typedef struct _IMAGELIST *HIMAGELIST;
 
 #define ILC_MASK    0x00000001
 #define ILC_COLOR24 0x00000018
+#define ILC_COLOR32 0x00000020
 
 #define CLR_NONE    0xFFFFFFFF
 #define CLR_DEFAULT 0xFF000000
 
 HIMAGELIST ImageList_Create(int cx, int cy, UINT flags, int initial, int grow);
+int ImageList_Add(HIMAGELIST imageList, HBITMAP image, HBITMAP mask);
 HIMAGELIST ImageList_LoadImage(HINSTANCE instance, LPCWSTR bitmap, int cx, int grow, COLORREF mask,
                                UINT type, UINT flags);
 BOOL ImageList_Destroy(HIMAGELIST imageList);
@@ -99,8 +109,43 @@ typedef struct _TBBUTTON {
 
 #define Button_GetIdealSize(hwnd, psize) ((BOOL)SendMessage((hwnd), BCM_GETIDEALSIZE, 0, (LPARAM)(psize)))
 
-/* Tab control */
-#define TCM_FIRST     0x1300
-#define TCM_SETCURSEL (TCM_FIRST + 12)
+/* Tab control: the row of tabs of the main window (meos.cpp). MeOS uses it as a
+   bare row and places the work space below it itself. */
+#define WC_TABCONTROL L"SysTabControl32"
 
+#define TCIF_TEXT  0x0001
+#define TCIF_IMAGE 0x0002
+
+typedef struct tagTCITEMW {
+  UINT   mask;
+  DWORD  dwState;
+  DWORD  dwStateMask;
+  LPWSTR pszText;
+  int    cchTextMax;
+  int    iImage;
+  LPARAM lParam;
+} TCITEMW, TCITEM, *LPTCITEMW;
+
+#define TCM_FIRST          0x1300
+#define TCM_SETIMAGELIST   (TCM_FIRST + 3)
+#define TCM_GETITEMCOUNT   (TCM_FIRST + 4)
+#define TCM_DELETEALLITEMS (TCM_FIRST + 9)
+#define TCM_GETCURSEL      (TCM_FIRST + 11)
+#define TCM_SETCURSEL      (TCM_FIRST + 12)
+#define TCM_INSERTITEMW    (TCM_FIRST + 62)
+#define TCM_INSERTITEM     TCM_INSERTITEMW
+
+#define TabCtrl_SetImageList(hwnd, himl) \
+  ((HIMAGELIST)SendMessage((hwnd), TCM_SETIMAGELIST, 0, (LPARAM)(HIMAGELIST)(himl)))
+#define TabCtrl_GetItemCount(hwnd) ((int)SendMessage((hwnd), TCM_GETITEMCOUNT, 0, 0))
+#define TabCtrl_DeleteAllItems(hwnd) ((BOOL)SendMessage((hwnd), TCM_DELETEALLITEMS, 0, 0))
+#define TabCtrl_GetCurSel(hwnd) ((int)SendMessage((hwnd), TCM_GETCURSEL, 0, 0))
 #define TabCtrl_SetCurSel(hwnd, i) ((int)SendMessage((hwnd), TCM_SETCURSEL, (WPARAM)(i), 0))
+#define TabCtrl_InsertItem(hwnd, iItem, pitem) \
+  ((int)SendMessage((hwnd), TCM_INSERTITEMW, (WPARAM)(int)(iItem), (LPARAM)(const TCITEMW *)(pitem)))
+
+// Notifications, sent to the parent as WM_NOTIFY with an NMHDR. Only a user action
+// sends them; TCM_SETCURSEL does not.
+#define TCN_FIRST       (0U - 550U)
+#define TCN_SELCHANGE   (TCN_FIRST - 1)
+#define TCN_SELCHANGING (TCN_FIRST - 2)
