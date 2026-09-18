@@ -1,0 +1,5 @@
+kind,id,x,y,width,height,text
+page,1,0,0,866,699,scale 1 line 15
+control,PageText,40,29,126,25,1 Text and Graphics
+control,PageControls,174,29,77,25,2 Controls
+control,PageTable,259,29,124,25,3 Competition Table

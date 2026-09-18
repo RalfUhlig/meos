@@ -163,6 +163,21 @@ QT_QPA_PLATFORM=offscreen build/linux-debug/code/meos_gui_workbench -shot linux
 Both files are byte-identical between the Debug and the Release build and between runs, with and
 without a display.
 
+`code/platform/qt/workbench/windows-page1..3.csv` are the layout of a Windows run, so that a later
+run can be compared without a Windows machine:
+
+```bash
+build/linux-debug/code/meos_gui_workbench -shot linux
+for page in 1 2 3; do diff "code/platform/qt/workbench/windows-page$page.csv" "linux-page$page.csv"; done
+```
+
+They were taken on 2026-09-18 with the MSVC build of this workbench, the built-in demo competition
+and the `sportident.cardsystem` of a MeOS installation. The differences to expect are the ones
+stage 1.2.7 recorded (`plans/linux-port-1.2-qt-backend.md`): input fields 8 to 20 pixels narrower,
+combo boxes 7 pixels higher, list boxes 10 pixels higher, buttons 1 to 2 pixels wider. Note that
+the workbench reads `sportident.cardsystem` from the current folder, and that the numbers hold for
+an unscaled screen; the workbench lays itself out at 96 dpi on both platforms.
+
 **How far to take the comparison.** Pixel equality with Windows is not a goal; an intact layout is.
 A few pixels more width or height on Linux are fine as long as nothing collides. Fix what breaks the
 layout: text over other text or over a control, labels that are cut off or ellipsized where Windows

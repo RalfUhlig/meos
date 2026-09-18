@@ -1,0 +1,24 @@
+kind,id,x,y,width,height,text
+page,2,0,0,665,590,scale 1 line 15
+control,PageText,40,29,126,25,1 Text and Graphics
+control,PageControls,174,29,77,25,2 Controls
+control,PageTable,259,29,124,25,3 Competition Table
+control,Name,40,150,184,21,Jörg Müller
+control,Time,228,150,76,21,12:34:56
+control,Password,308,150,94,21,secret
+control,Notes,40,197,300,50,A multi-line edit control.  Second line.
+control,Class,40,282,150,21,H21
+control,Club,195,282,150,21,Free text
+control,List,40,334,150,110,
+control,Multi,195,334,150,110,
+control,Check,40,463,13,13,
+control,Push,121,462,75,25,Button
+control,Ask,204,462,164,25,Ask() with Renamed Buttons
+control,Alert,376,462,75,25,Alert()
+control,Info,40,499,75,25,Info Box
+control,Warning,123,499,91,25,Warning Box
+control,Open,222,499,81,25,Open File…
+control,Save,311,499,80,25,Save File…
+control,Folder,399,499,75,25,Folder…
+control,Color,482,499,75,25,Colour…
+control,Clear,565,499,92,25,Reload Page
