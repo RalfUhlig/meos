@@ -348,6 +348,10 @@ if(WIN32)
   enable_language(RC)
 
   configure_file(meos_dpi_manifest.xml "${CMAKE_CURRENT_BINARY_DIR}/meos_dpi.manifest" COPYONLY)
+  # The workbench keeps the common controls but declares itself DPI unaware, so that its
+  # pages are the 96 dpi layout on every screen (platform/qt/workbench/workbench.manifest).
+  configure_file(platform/qt/workbench/workbench.manifest
+                 "${CMAKE_CURRENT_BINARY_DIR}/workbench.manifest" COPYONLY)
 
   add_executable(meos WIN32
     ${MEOS_UI_SOURCES} ${MEOS_NET_SOURCES} ${MEOS_WIN32_SOURCES}
@@ -387,7 +391,7 @@ if(WIN32)
     platform/qt/workbench/app_frame.cpp
     platform/qt/workbench/demo_competition.cpp
     platform/qt/workbench/workbench.cpp
-    meos.rc meoslang.rc "${CMAKE_CURRENT_BINARY_DIR}/meos_dpi.manifest")
+    meos.rc meoslang.rc "${CMAKE_CURRENT_BINARY_DIR}/workbench.manifest")
   meos_apply_settings(meos_gui_workbench)
   target_include_directories(meos_gui_workbench PRIVATE platform/qt/workbench)
   target_link_directories(meos_gui_workbench PRIVATE

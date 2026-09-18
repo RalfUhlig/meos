@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
+  <!-- The workbench compares the pages with the Linux build, so it must lay them out
+       the same way on every machine. MeOS itself is per-monitor DPI aware
+       (meos_dpi_manifest.xml); on a scaled screen Windows then hands it a scaled
+       DEFAULT_GUI_FONT, from which gdioutput derives the size of every control and the
+       row height of the tables, and the pages no longer match a run at 100 %. The
+       workbench declares itself DPI unaware instead: Windows lays it out at 96 dpi and
+       scales the result for the screen, so a screenshot is the 96 dpi layout whatever
+       the screen is set to. The dependency on the common controls stays, because the
+       controls look different without it. -->
+  <asmv3:application>
+    <asmv3:windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">false</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">unaware</dpiAwareness>
+    </asmv3:windowsSettings>
+  </asmv3:application>
+
+  <assemblyIdentity
+    version="1.0.0.0"
+    processorArchitecture="*"
+    name="Melin Software.MeOS.Workbench"
+    type="win32"
+  />
+  <description>MeOS GUI workbench</description>
+  <dependency>
+    <dependentAssembly>
+        <assemblyIdentity
+            type="win32"
+            name="Microsoft.Windows.Common-Controls"
+            version="6.0.0.0"
+            processorArchitecture="*"
+            publicKeyToken="6595b64144ccf1df"
+            language="*"
+        />
+    </dependentAssembly>
+</dependency>
+</assembly>
