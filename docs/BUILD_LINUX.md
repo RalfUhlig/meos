@@ -134,6 +134,12 @@ cd <folder with sportident.cardsystem>   # from a MeOS installation; the runner 
 build/linux-debug/code/meos_gui_workbench [competition.meos] [-page 1|2|3]
 ```
 
+`sportident.cardsystem` (the runner table needs it) and `clubnamemap.csv` (without it MeOS reports
+an error at startup; the workbench writes an empty one into its data folder instead) come with the
+Windows installer, not with the sources, and are not part of this repository. Keep a copy outside
+the working tree and start the workbench there, for example in `../meos.private/install` next to
+the checkout. Where a Linux installation gets these files is open, see `plans/linux-port.md`.
+
 Without a file, page 3 shows a built-in demo competition. Settings are kept in
 `~/.local/share/MeOS Workbench`.
 
