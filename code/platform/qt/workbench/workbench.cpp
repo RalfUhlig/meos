@@ -520,7 +520,9 @@ const std::vector<std::string> &pageWidgets(Page page) {
 // Writes what cannot be read from the screenshot: the measures of the page and the
 // position and size of every control (its window is not part of the canvas).
 bool writeLayout(const std::wstring &file, gdioutput &gdi, Page page) {
-  std::ofstream out(meosPath(file));
+  // Binary, so that the lines end in "\n" on both platforms and the file of a Windows
+  // run can be compared with that of a Linux run line by line.
+  std::ofstream out(meosPath(file), std::ios::binary);
   if (!out)
     return false;
   out << "kind,id,x,y,width,height,text\n";
