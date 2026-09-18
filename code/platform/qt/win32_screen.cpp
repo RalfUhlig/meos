@@ -162,7 +162,8 @@ HCURSOR SetCursor(HCURSOR cursor) {
 
 namespace {
 
-constexpr int edgeExtent = 2; // SM_CXEDGE, SM_CYEDGE
+constexpr int edgeExtent = 2;       // SM_CXEDGE, SM_CYEDGE
+constexpr int smallIconExtent = 16; // SM_CXSMICON, SM_CYSMICON
 
 QRect virtualScreen() {
   QRect area;
@@ -183,6 +184,10 @@ int GetSystemMetrics(int index) {
   case SM_CYVIRTUALSCREEN: return virtualScreen().height();
   case SM_CXEDGE:
   case SM_CYEDGE: return edgeExtent;
+  // The size of a small icon, 16 x 16 pixels on Windows at 96 dpi. MeOS offsets
+  // the position of a second instance's window by it.
+  case SM_CXSMICON:
+  case SM_CYSMICON: return smallIconExtent;
   default: return 0;
   }
 }

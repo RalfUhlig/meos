@@ -382,6 +382,7 @@ ATOM RegisterClassEx(const WNDCLASSEX *windowClass) {
   entry->instance = windowClass->hInstance;
   entry->cursor = windowClass->hCursor;
   entry->background = windowClass->hbrBackground;
+  entry->icon = windowClass->hIcon ? windowClass->hIcon : windowClass->hIconSm;
 
   std::lock_guard<std::mutex> lock(tableMutex);
   registerSystemClasses();
@@ -440,8 +441,12 @@ HWND CreateWindowEx(DWORD exStyle, LPCWSTR className, LPCWSTR windowName, DWORD 
     windowClass->createWidgets(*window, parentWidget);
   else
     meos_qt::createCanvas(*window, parentWidget);
-  if (!window->isChild())
+  if (!window->isChild()) {
     window->frame->setWindowTitle(QString::fromWCharArray(window->text.c_str(), int(window->text.size())));
+    // Windows takes the icon of a top-level window from its class.
+    if (windowClass->icon)
+      window->frame->setWindowIcon(meos_qt::iconImage(windowClass->icon));
+  }
 
   if (window->isChild()) {
     if (x == CW_USEDEFAULT)
@@ -868,6 +873,19 @@ HWND WindowFromPoint(POINT point) {
   while (target && target->isChild() && (target->style & WS_DISABLED))
     target = meos_qt::findWindow(target->parent);
   return target ? target->handle : nullptr;
+}
+
+// As on Windows: true for a child window of the parent at any depth. The chain
+// ends at a window that is not a child, so an owned popup does not count.
+BOOL IsChild(HWND parent, HWND window) {
+  if (!parent)
+    return FALSE;
+  for (std::shared_ptr<Window> target = meos_qt::findWindow(window); target && target->isChild();
+       target = meos_qt::findWindow(target->parent)) {
+    if (target->parent == parent)
+      return TRUE;
+  }
+  return FALSE;
 }
 
 HWND GetDesktopWindow() {

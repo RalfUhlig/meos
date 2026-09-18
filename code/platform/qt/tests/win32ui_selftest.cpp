@@ -1,4 +1,4 @@
-/************************************************************************
+﻿/************************************************************************
     MeOS - Orienteering Software
     Linux port: self test of the Win32 window manager subset on Qt.
 
@@ -618,6 +618,74 @@ void testKeyboardHook() {
 
 /* ------------------------------------------------------------------ */
 
+std::vector<MSG> getMessageHookCalls;
+bool changeMessageInHook = false;
+
+LRESULT CALLBACK getMessageHook(int code, WPARAM wParam, LPARAM lParam) {
+  if (code >= 0) {
+    auto *msg = reinterpret_cast<MSG *>(lParam);
+    getMessageHookCalls.push_back(*msg);
+    CHECK(wParam == PM_REMOVE);
+    // A WH_GETMESSAGE hook may change the message it is given.
+    if (changeMessageInHook)
+      msg->wParam = 4711;
+  }
+  return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+// MeOS installs a WH_GETMESSAGE hook to pass mouse messages to its tooltips.
+// This layer delivers key and mouse input directly to the window procedure, so
+// the hook sees only what the application posts.
+void testGetMessageHook() {
+  HWND window = createTop(recordClass);
+  const HHOOK hook = SetWindowsHookEx(WH_GETMESSAGE, getMessageHook, nullptr, GetCurrentThreadId());
+  CHECK(hook != nullptr);
+
+  events.clear();
+  getMessageHookCalls.clear();
+  CHECK(PostMessage(window, WM_USER + 5, 7, 8));
+  MSG msg;
+  CHECK(GetMessage(&msg, nullptr, 0, 0));
+  CHECK(getMessageHookCalls.size() == 1);
+  CHECK(getMessageHookCalls.size() == 1 && getMessageHookCalls[0].message == WM_USER + 5 &&
+        getMessageHookCalls[0].wParam == 7 && getMessageHookCalls[0].hwnd == window);
+  DispatchMessage(&msg);
+  CHECK(lastOf(window, WM_USER + 5) && lastOf(window, WM_USER + 5)->wParam == 7);
+
+  // A message the hook changed is the one that is dispatched.
+  changeMessageInHook = true;
+  CHECK(PostMessage(window, WM_USER + 5, 7, 8));
+  CHECK(GetMessage(&msg, nullptr, 0, 0) && msg.wParam == 4711);
+  DispatchMessage(&msg);
+  CHECK(lastOf(window, WM_USER + 5) && lastOf(window, WM_USER + 5)->wParam == 4711);
+  changeMessageInHook = false;
+
+  // MeOS finds the gdioutput of a mouse message with IsChild: a child window of
+  // any depth belongs to its top-level window.
+  HWND child = CreateWindowEx(0, recordClass, L"child", WS_CHILD | WS_VISIBLE, 0, 0, 50, 50, window, nullptr,
+                              meos_qt::applicationInstance(), nullptr);
+  HWND grandChild = CreateWindowEx(0, recordClass, L"grand", WS_CHILD | WS_VISIBLE, 0, 0, 20, 20, child, nullptr,
+                                   meos_qt::applicationInstance(), nullptr);
+  HWND other = createTop(recordClass);
+  CHECK(IsChild(window, child) && IsChild(window, grandChild) && IsChild(child, grandChild));
+  CHECK(!IsChild(grandChild, child) && !IsChild(window, other) && !IsChild(window, window));
+  CHECK(!IsChild(nullptr, child) && !IsChild(window, nullptr));
+  CHECK(DestroyWindow(other));
+
+  // Input does not pass the queue, so the hook does not see it.
+  getMessageHookCalls.clear();
+  sendKeyEvent(clientOf(window), QEvent::KeyPress, Qt::Key_B, Qt::NoModifier, QStringLiteral("b"));
+  CHECK(getMessageHookCalls.empty() && countOf(window, WM_KEYDOWN) == 1);
+
+  CHECK(UnhookWindowsHookEx(hook));
+  getMessageHookCalls.clear();
+  CHECK(PostMessage(window, WM_USER + 5, 1, 0));
+  CHECK(GetMessage(&msg, nullptr, 0, 0) && getMessageHookCalls.empty());
+  CHECK(DestroyWindow(window));
+}
+
+/* ------------------------------------------------------------------ */
+
 void testHandleReuse() {
   std::set<HWND> handles;
   HWND first = nullptr;
@@ -799,6 +867,7 @@ int main(int argc, char **argv) {
   testPostedMessageInModalLoop();
   testTimers();
   testKeyboardHook();
+  testGetMessageHook();
   testHandleReuse();
   testScrollBars();
   testPaint();

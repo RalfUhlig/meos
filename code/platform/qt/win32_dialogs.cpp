@@ -144,7 +144,108 @@ void cancelMessageBox(MessageBoxState &state) {
     endMessageBox(state, IDOK);
 }
 
+/* ---------------------------------------------------------------------
+   Dialogs from a resource template (CreateDialog). MeOS has a single one, the
+   splash screen of meos.cpp: a template without controls, which paints an image
+   itself (plans/linux-port-1.3-app-frame.md, E8). cmake/Win32Resources.cmake
+   writes size, style and caption of the template as a resource of type 5.
+   --------------------------------------------------------------------- */
+
+std::map<HWND, DLGPROC> templateDialogs;
+
+struct DialogTemplate {
+  int cx = 0;
+  int cy = 0;
+  DWORD style = 0;
+  bool centre = false;
+  std::wstring caption;
+};
+
+// The window styles a template may ask for. Dialog styles (DS_) other than
+// DS_CENTER concern the font and the frame, which this layer takes from the
+// class and the style bits.
+DWORD windowStyleToken(const QString &token) {
+  if (token == "WS_POPUP") return WS_POPUP;
+  if (token == "WS_CHILD") return WS_CHILD;
+  if (token == "WS_VISIBLE") return WS_VISIBLE;
+  if (token == "WS_CAPTION") return WS_CAPTION;
+  if (token == "WS_BORDER") return WS_BORDER;
+  if (token == "WS_SYSMENU") return WS_SYSMENU;
+  if (token == "WS_THICKFRAME") return WS_THICKFRAME;
+  if (token == "WS_MINIMIZEBOX") return WS_MINIMIZEBOX;
+  if (token == "WS_MAXIMIZEBOX") return WS_MAXIMIZEBOX;
+  return 0;
+}
+
+bool readDialogTemplate(HINSTANCE instance, LPCWSTR name, DialogTemplate &dialog) {
+  const HRSRC resource = FindResource(instance, name, MAKEINTRESOURCE(5));
+  const HGLOBAL data = resource ? LoadResource(instance, resource) : nullptr;
+  const void *text = data ? LockResource(data) : nullptr;
+  if (!text)
+    return false;
+  const QString content =
+      QString::fromUtf8(static_cast<const char *>(text), int(SizeofResource(instance, resource)));
+  bool haveSize = false;
+  for (const QString &line : content.split('\n', Qt::SkipEmptyParts)) {
+    const QStringList parts = line.trimmed().split(' ', Qt::SkipEmptyParts);
+    if (parts.isEmpty())
+      continue;
+    if (parts[0] == "size" && parts.size() == 5) {
+      dialog.cx = parts[3].toInt();
+      dialog.cy = parts[4].toInt();
+      haveSize = true;
+    }
+    else if (parts[0] == "style") {
+      for (int i = 1; i < parts.size(); i++) {
+        dialog.style |= windowStyleToken(parts[i]);
+        if (parts[i] == "DS_CENTER")
+          dialog.centre = true;
+      }
+    }
+    else if (parts[0] == "caption") {
+      dialog.caption = toWide(line.trimmed().mid(8));
+    }
+  }
+  return haveSize;
+}
+
+// Dialog units into pixels: four units horizontally and eight vertically per
+// character cell of the dialog font. The horizontal base unit is the average width
+// of the alphabet, as the dialog manager of Windows computes it with DS_SETFONT
+// (the average width of the font tables is smaller and would make dialogs narrow).
+QSize dialogUnitsToPixels(int cx, int cy) {
+  const HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+  const auto object = meos_qt::findGdiObject<meos_qt::Font>(font, meos_qt::GdiType::Font);
+  if (!object)
+    return QSize(cx, cy);
+  const wchar_t alphabet[] = L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const HDC dc = GetDC(nullptr);
+  const HGDIOBJ previous = SelectObject(dc, font);
+  SIZE extent = {0, 0};
+  GetTextExtentPoint32(dc, alphabet, 52, &extent);
+  SelectObject(dc, previous);
+  ReleaseDC(nullptr, dc);
+  const int baseX = std::max(1, (extent.cx / 26 + 1) / 2);
+  const int baseY = std::max(1, object->metrics.height);
+  return QSize((cx * baseX + 2) / 4, (cy * baseY + 4) / 8);
+}
+
 LRESULT CALLBACK messageBoxProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
+  // A dialog from a template: its procedure runs first, and a message it reports
+  // as handled needs no default processing.
+  const auto dialog = templateDialogs.find(window);
+  if (dialog != templateDialogs.end()) {
+    if (message == WM_DESTROY) {
+      const DLGPROC proc = dialog->second;
+      templateDialogs.erase(dialog);
+      proc(window, message, wParam, lParam);
+      return DefWindowProc(window, message, wParam, lParam);
+    }
+    if (const INT_PTR handled = dialog->second(window, message, wParam, lParam))
+      return LRESULT(handled);
+    return DefWindowProc(window, message, wParam, lParam);
+  }
+
   const auto entry = messageBoxes.find(window);
   MessageBoxState *state = entry == messageBoxes.end() ? nullptr : entry->second;
   if (!state)
@@ -402,6 +503,48 @@ bool meos_qt::dialogKeyEvent(QWidget *receiver, const QKeyEvent &event) {
   default:
     return false;
   }
+}
+
+// A modeless dialog from a template. Windows fills it with the controls of the
+// template; the one template of MeOS has none, so the window is the dialog.
+HWND CreateDialog(HINSTANCE instance, LPCWSTR templateName, HWND parent, DLGPROC dialogProc) {
+  DialogTemplate dialog;
+  if (!dialogProc || !readDialogTemplate(instance, templateName, dialog)) {
+    SetLastError(ERROR_RESOURCE_NAME_NOT_FOUND);
+    return nullptr;
+  }
+  const QSize size = dialogUnitsToPixels(dialog.cx, dialog.cy);
+  int x = CW_USEDEFAULT;
+  int y = CW_USEDEFAULT;
+  if (dialog.centre) {
+    // Windows centres on the owner, or on the screen without one.
+    RECT area = {0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
+    if (parent)
+      GetWindowRect(parent, &area);
+    x = area.left + (area.right - area.left - size.width()) / 2;
+    y = area.top + (area.bottom - area.top - size.height()) / 2;
+  }
+  // A template dialog is hidden until the application shows it, as on Windows
+  // without WS_VISIBLE in the template.
+  const HWND window = CreateWindowEx(0, dialogClassName, dialog.caption.c_str(), dialog.style & ~DWORD(WS_VISIBLE),
+                                     x, y, size.width(), size.height(), parent, nullptr, instance, nullptr);
+  if (!window)
+    return nullptr;
+  templateDialogs[window] = dialogProc;
+  meos_qt::callWindowProc(meos_qt::findWindow(window), WM_INITDIALOG, 0, 0);
+  if (dialog.style & WS_VISIBLE)
+    ShowWindow(window, SW_SHOW);
+  return window;
+}
+
+// MeOS ends no dialog of its own (the About box is never opened), and a modeless
+// dialog is closed with DestroyWindow on Windows as well.
+BOOL EndDialog(HWND dialog, INT_PTR /*result*/) {
+  if (!templateDialogs.count(dialog)) {
+    SetLastError(ERROR_INVALID_WINDOW_HANDLE);
+    return FALSE;
+  }
+  return DestroyWindow(dialog);
 }
 
 int MessageBox(HWND owner, LPCWSTR text, LPCWSTR caption, UINT type) {

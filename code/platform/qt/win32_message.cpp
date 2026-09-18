@@ -389,11 +389,15 @@ BOOL KillTimer(HWND window, UINT_PTR id) {
 
 /* ---------------------------------------------------------------------
    Hooks. WH_KEYBOARD is called for the key events of the application
-   (see createApplication), WH_CBT by the message box (step 1.2.5).
+   (see createApplication), WH_CBT by the message box (step 1.2.5), and
+   WH_GETMESSAGE by GetMessage for every message it returns (win32_app.cpp).
+   Key input does not pass the message queue in this layer, so a WH_GETMESSAGE
+   hook sees no key message; MeOS installs one to pass mouse messages to its
+   tooltips, which Qt shows on its own hover event anyway.
    --------------------------------------------------------------------- */
 
 HHOOK SetWindowsHookEx(int hookType, HOOKPROC hookProc, HINSTANCE /*module*/, DWORD /*threadId*/) {
-  if (hookType != WH_KEYBOARD && hookType != WH_CBT) {
+  if (hookType != WH_KEYBOARD && hookType != WH_CBT && hookType != WH_GETMESSAGE) {
     SetLastError(errorInvalidHookFilter);
     return nullptr;
   }

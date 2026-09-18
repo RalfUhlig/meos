@@ -158,6 +158,10 @@ typedef struct tagTPMPARAMS *LPTPMPARAMS;
 #define WM_KEYDOWN           0x0100
 #define WM_KEYUP             0x0101
 #define WM_CHAR              0x0102
+// The system key messages exist for the accelerator translation; this layer
+// delivers key input directly to the window procedure and never posts it.
+#define WM_SYSKEYDOWN        0x0104
+#define WM_SYSCHAR           0x0106
 #define WM_INITDIALOG        0x0110
 #define WM_COMMAND           0x0111
 #define WM_TIMER             0x0113
@@ -192,6 +196,12 @@ void PostQuitMessage(int exitCode);
 
 // Accelerators (stage 1.3). The main message loop translates the table of meos.rc
 // into WM_COMMAND before dispatching a message (meos.cpp).
+#define FVIRTKEY  0x01
+#define FNOINVERT 0x02
+#define FSHIFT    0x04
+#define FCONTROL  0x08
+#define FALT      0x10
+
 HACCEL LoadAccelerators(HINSTANCE instance, LPCWSTR tableName);
 int TranslateAccelerator(HWND window, HACCEL table, LPMSG msg);
 
@@ -313,6 +323,8 @@ HWND GetCapture();
 #define WH_CBT        5
 #define HC_ACTION     0
 #define HCBT_ACTIVATE 5
+// wParam of a WH_GETMESSAGE hook: GetMessage removes the message from the queue.
+#define PM_REMOVE     0x0001
 
 #define MK_LBUTTON 0x0001
 #define MK_RBUTTON 0x0002

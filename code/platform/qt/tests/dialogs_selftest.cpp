@@ -65,9 +65,12 @@ int failures = 0;
 const wchar_t *const ownerClass = L"DialogsTestOwner";
 
 std::vector<UINT> ownerMessages;
+WPARAM lastCommand = 0; // wParam of the last WM_COMMAND
 
 LRESULT CALLBACK ownerProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam) {
   ownerMessages.push_back(message);
+  if (message == WM_COMMAND)
+    lastCommand = wParam;
   return DefWindowProc(window, message, wParam, lParam);
 }
 
@@ -318,6 +321,124 @@ void testResources(const std::filesystem::path &codeDir) {
                                               IMAGE_BITMAP, LR_CREATEDIBSECTION);
   CHECK(list != nullptr);
   ImageList_Destroy(list);
+}
+
+/* ---------------------------------------------------------------------
+   Icons, accelerators and the dialog template of the splash screen
+   --------------------------------------------------------------------- */
+
+std::vector<UINT> splashMessages;
+
+INT_PTR CALLBACK splashProc(HWND dialog, UINT message, WPARAM /*wParam*/, LPARAM /*lParam*/) {
+  splashMessages.push_back(message);
+  if (message == WM_PAINT) {
+    // As the splash screen of meos.cpp: it paints itself and reports FALSE.
+    PAINTSTRUCT ps;
+    const HDC dc = BeginPaint(dialog, &ps);
+    const HBRUSH brush = CreateSolidBrush(RGB(10, 200, 30));
+    const HGDIOBJ previousBrush = SelectObject(dc, brush);
+    const HGDIOBJ previousPen = SelectObject(dc, GetStockObject(NULL_PEN));
+    Rectangle(dc, 0, 0, 41, 41);
+    SelectObject(dc, previousBrush);
+    SelectObject(dc, previousPen);
+    DeleteObject(brush);
+    EndPaint(dialog, &ps);
+    return FALSE;
+  }
+  if (message == WM_ERASEBKGND)
+    return TRUE;
+  return FALSE;
+}
+
+void testIconsAcceleratorsAndTemplate() {
+  const HINSTANCE instance = meos_qt::applicationInstance();
+  // The numbers of resource.h.
+  constexpr int idiMeos = 107;   // IDI_MEOS, the only ICON of meos.rc
+  constexpr int idiSmall = 108;  // IDI_SMALL: declared, but without a resource
+  constexpr int idcMeos = 109;   // IDC_MEOS, the accelerator table
+  constexpr int idmAbout = 104;  // IDM_ABOUT, its command
+  constexpr int iddSplash = 133; // IDD_SPLASH
+
+  // The icon of a window class. A name without a resource gives NULL, as on Windows.
+  const HICON icon = LoadIcon(instance, MAKEINTRESOURCE(idiMeos));
+  CHECK(icon != nullptr);
+  CHECK(!meos_qt::iconImage(icon).isNull());
+  CHECK(LoadIcon(instance, MAKEINTRESOURCE(idiSmall)) == nullptr);
+  CHECK(meos_qt::iconImage(nullptr).isNull());
+
+  WNDCLASSEX iconClass = {};
+  iconClass.cbSize = sizeof(iconClass);
+  iconClass.lpfnWndProc = ownerProc;
+  iconClass.hInstance = instance;
+  iconClass.hIcon = icon;
+  iconClass.lpszClassName = L"DialogsTestIconClass";
+  CHECK(RegisterClassEx(&iconClass) != 0);
+  const HWND iconWindow = CreateWindowEx(0, iconClass.lpszClassName, L"Icon", WS_POPUP, 0, 0, 100, 100, nullptr,
+                                         nullptr, instance, nullptr);
+  CHECK(iconWindow && !meos_qt::findWindow(iconWindow)->frame->windowIcon().isNull());
+  CHECK(DestroyWindow(iconWindow));
+
+  // The accelerator table of meos.rc: Alt+? and Alt+/ on IDM_ABOUT. A character
+  // with Alt arrives as WM_SYSCHAR.
+  const HACCEL table = LoadAccelerators(instance, MAKEINTRESOURCE(idcMeos));
+  CHECK(table != nullptr);
+  CHECK(LoadAccelerators(instance, MAKEINTRESOURCE(9999)) == nullptr);
+
+  const HWND owner = createOwner();
+  ownerMessages.clear();
+  MSG msg = {};
+  msg.hwnd = owner;
+  msg.message = WM_SYSCHAR;
+  msg.wParam = WPARAM('?');
+  CHECK(TranslateAccelerator(owner, table, &msg) != 0);
+  CHECK(countOf(WM_COMMAND) == 1);
+  CHECK(LOWORD(lastCommand) == idmAbout && HIWORD(lastCommand) == 1);
+
+  ownerMessages.clear();
+  msg.message = WM_CHAR; // without Alt
+  CHECK(TranslateAccelerator(owner, table, &msg) == 0);
+  msg.message = WM_SYSCHAR;
+  msg.wParam = WPARAM('x'); // another character
+  CHECK(TranslateAccelerator(owner, table, &msg) == 0);
+  msg.message = WM_MOUSEMOVE; // no key message
+  CHECK(TranslateAccelerator(owner, table, &msg) == 0);
+  CHECK(TranslateAccelerator(owner, nullptr, &msg) == 0);
+  CHECK(TranslateAccelerator(nullptr, table, &msg) == 0);
+  CHECK(countOf(WM_COMMAND) == 0);
+
+  ownerMessages.clear();
+  msg.message = WM_SYSCHAR;
+  msg.wParam = WPARAM('/'); // the second entry
+  CHECK(TranslateAccelerator(owner, table, &msg) != 0 && countOf(WM_COMMAND) == 1);
+  CHECK(DestroyWindow(owner));
+
+  // The dialog template of the splash screen: WM_INITDIALOG, the size of the
+  // template, hidden until the application shows it, and it paints itself.
+  splashMessages.clear();
+  const HWND splash = CreateDialog(instance, MAKEINTRESOURCE(iddSplash), nullptr, splashProc);
+  CHECK(splash != nullptr);
+  CHECK(!splashMessages.empty() && splashMessages[0] == WM_INITDIALOG);
+  CHECK(!IsWindowVisible(splash));
+  RECT rect = {0, 0, 0, 0};
+  CHECK(GetWindowRect(splash, &rect));
+  // 309 x 178 dialog units. The pixel size follows the base units of
+  // DEFAULT_GUI_FONT and differs from Windows with another substitute font; the
+  // image of the splash screen (400 x 140) has to fit.
+  CHECK(rect.right - rect.left >= 400 && rect.bottom - rect.top >= 140);
+  ShowWindow(splash, SW_SHOW);
+  UpdateWindow(splash);
+  CHECK(IsWindowVisible(splash));
+  CHECK(std::count(splashMessages.begin(), splashMessages.end(), UINT(WM_PAINT)) >= 1);
+  {
+    const std::shared_ptr<meos_qt::Surface> surface = meos_qt::findWindow(splash)->surface;
+    std::lock_guard<std::mutex> lock(surface->mutex);
+    CHECK(surface->image.pixel(5, 5) == qRgb(10, 200, 30));
+  }
+  CHECK(EndDialog(splash, 0) && !meos_qt::findWindow(splash));
+  SetLastError(0);
+  CHECK(!EndDialog(nullptr, 0) && GetLastError() == ERROR_INVALID_WINDOW_HANDLE);
+  CHECK(CreateDialog(instance, MAKEINTRESOURCE(9999), nullptr, splashProc) == nullptr);
+  CHECK(CreateDialog(instance, MAKEINTRESOURCE(iddSplash), nullptr, nullptr) == nullptr);
 }
 
 /* ---------------------------------------------------------------------
@@ -1116,6 +1237,7 @@ int main(int argc, char **argv) {
   }
 
   testResources(codeDir);
+  testIconsAcceleratorsAndTemplate();
   testGlobalMemory();
   testClipboard();
   testMessageBox();

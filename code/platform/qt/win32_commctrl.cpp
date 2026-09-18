@@ -1,7 +1,7 @@
 /************************************************************************
     MeOS - Orienteering Software
-    Linux port: the common controls MeOS uses: tooltips, the toolbar and image
-    lists.
+    Linux port: the common controls MeOS uses: tooltips, the toolbar, image
+    lists and the tab control of the main window.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,6 +12,9 @@
 #include "win32_gdi.h"
 
 #include <QHelpEvent>
+#include <QKeyEvent>
+#include <QMouseEvent>
+#include <QTabBar>
 #include <QTextDocument>
 #include <QToolBar>
 #include <QToolButton>
@@ -334,6 +337,178 @@ void createToolbar(Window &window, QWidget *parentWidget) {
   window.client = bar;
 }
 
+/* ---------------------------------------------------------------------
+   Tab control (SysTabControl32). MeOS uses it as the bare row of tabs at the top
+   of the main window and puts the work space below it itself, so a QTabBar
+   carries it. The layer changes the selection, never Qt: only a change by the
+   user notifies the parent, first with TCN_SELCHANGING (which the parent can
+   refuse) and then with TCN_SELCHANGE; TCM_SETCURSEL notifies nothing.
+   --------------------------------------------------------------------- */
+
+class TabControl : public Control {
+public:
+  HFONT font = nullptr;
+  QPointer<QTabBar> bar;
+  HIMAGELIST imageList = nullptr;
+};
+
+// Sends a notification of a control to its parent (WM_NOTIFY with an NMHDR) and
+// returns the parent's answer.
+LRESULT notifyParentOfCode(const Window &control, UINT code) {
+  const std::shared_ptr<Window> parent = meos_qt::findWindow(control.parent);
+  if (!parent)
+    return 0;
+  NMHDR header = {control.handle, UINT_PTR(control.id), code};
+  return meos_qt::callWindowProc(parent, WM_NOTIFY, WPARAM(control.id), reinterpret_cast<LPARAM>(&header));
+}
+
+// The icon of a tab, from the image index stored as its item data.
+void applyTabImage(TabControl &control, int index) {
+  QTabBar *bar = control.bar;
+  if (!bar || index < 0 || index >= bar->count())
+    return;
+  const int image = bar->tabData(index).toInt();
+  const std::shared_ptr<ImageList> list = findImageList(control.imageList);
+  if (image >= 0 && list && image < int(list->images.size()))
+    bar->setTabIcon(index, QIcon(list->images[std::size_t(image)]));
+  else
+    bar->setTabIcon(index, QIcon());
+}
+
+class TabBarWidget : public QTabBar {
+public:
+  explicit TabBarWidget(QWidget *parent) : QTabBar(parent) {}
+
+  // A selection by the user: the parent may refuse it.
+  void selectByUser(int index) {
+    const std::shared_ptr<Window> window = meos_qt::findWindow(meos_qt::windowFromWidget(this));
+    if (!window || index < 0 || index >= count() || index == currentIndex())
+      return;
+    if (notifyParentOfCode(*window, TCN_SELCHANGING))
+      return;
+    setCurrentIndex(index);
+    notifyParentOfCode(*window, TCN_SELCHANGE);
+  }
+
+protected:
+  void mousePressEvent(QMouseEvent *event) override {
+    if (event->button() == Qt::LeftButton) {
+      selectByUser(tabAt(event->position().toPoint()));
+      event->accept();
+      return;
+    }
+    QTabBar::mousePressEvent(event);
+  }
+
+  // Arrow keys move the selection while the control has the focus, which needs
+  // WS_TABSTOP (the tab row of MeOS does not have it).
+  void keyPressEvent(QKeyEvent *event) override {
+    int index = -1;
+    switch (event->key()) {
+    case Qt::Key_Left:
+    case Qt::Key_Up:
+      index = currentIndex() - 1;
+      break;
+    case Qt::Key_Right:
+    case Qt::Key_Down:
+      index = currentIndex() + 1;
+      break;
+    case Qt::Key_Home:
+      index = 0;
+      break;
+    case Qt::Key_End:
+      index = count() - 1;
+      break;
+    default:
+      QTabBar::keyPressEvent(event);
+      return;
+    }
+    selectByUser(index);
+    event->accept();
+  }
+
+  bool focusNextPrevChild(bool) override { return false; }
+};
+
+LRESULT CALLBACK tabControlProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+  const std::shared_ptr<Window> window = meos_qt::findWindow(hwnd);
+  const auto control = window ? std::dynamic_pointer_cast<TabControl>(window->control) : nullptr;
+  QTabBar *bar = control ? control->bar.data() : nullptr;
+  if (!bar)
+    return DefWindowProc(hwnd, message, wParam, lParam);
+
+  switch (message) {
+  case TCM_INSERTITEMW: {
+    const auto *item = reinterpret_cast<const TCITEMW *>(lParam);
+    if (!item || int(wParam) < 0)
+      return -1;
+    // Windows appends an index beyond the end.
+    const int index = std::min<int>(int(wParam), bar->count());
+    QString text;
+    if ((item->mask & TCIF_TEXT) && item->pszText)
+      text = QString::fromWCharArray(item->pszText);
+    bar->insertTab(index, text);
+    bar->setTabData(index, (item->mask & TCIF_IMAGE) ? item->iImage : -1);
+    applyTabImage(*control, index);
+    return index;
+  }
+  case TCM_DELETEALLITEMS:
+    while (bar->count() > 0)
+      bar->removeTab(bar->count() - 1);
+    return TRUE;
+  case TCM_GETITEMCOUNT:
+    return bar->count();
+  case TCM_GETCURSEL:
+    return bar->currentIndex();
+  case TCM_SETCURSEL: {
+    // A tab row without a selected tab is not possible with QTabBar; MeOS never
+    // deselects (TCM_SETCURSEL with -1).
+    const int index = int(wParam);
+    if (index < 0 || index >= bar->count())
+      return -1;
+    const int previous = bar->currentIndex();
+    bar->setCurrentIndex(index);
+    return previous;
+  }
+  case TCM_SETIMAGELIST: {
+    const HIMAGELIST previous = control->imageList;
+    control->imageList = reinterpret_cast<HIMAGELIST>(lParam);
+    for (int index = 0; index < bar->count(); index++)
+      applyTabImage(*control, index);
+    return reinterpret_cast<LRESULT>(previous);
+  }
+  case WM_SETFONT: {
+    control->font = reinterpret_cast<HFONT>(wParam);
+    if (const auto font = meos_qt::findGdiObject<meos_qt::Font>(control->font, meos_qt::GdiType::Font))
+      bar->setFont(font->font);
+    return 0;
+  }
+  case WM_GETFONT:
+    return reinterpret_cast<LRESULT>(control->font);
+  }
+  return DefWindowProc(hwnd, message, wParam, lParam);
+}
+
+void createTabControl(Window &window, QWidget *parentWidget) {
+  QWidget *frame = meos_qt::createFrame(window, parentWidget);
+  auto control = std::make_shared<TabControl>();
+  auto *bar = new TabBarWidget(frame);
+  bar->setDrawBase(true);
+  bar->setExpanding(false);
+  bar->setMovable(false);
+  bar->setElideMode(Qt::ElideNone);
+  bar->setUsesScrollButtons(true);
+  // As on Windows: without WS_TABSTOP the control never gets the keyboard focus,
+  // and a click on a tab does not take it away from the window that has it.
+  bar->setFocusPolicy((window.style & WS_TABSTOP) ? Qt::StrongFocus : Qt::NoFocus);
+  control->bar = bar;
+  control->font = static_cast<HFONT>(GetStockObject(SYSTEM_FONT));
+  if (const auto font = meos_qt::findGdiObject<meos_qt::Font>(control->font, meos_qt::GdiType::Font))
+    bar->setFont(font->font);
+  window.control = control;
+  window.client = bar;
+}
+
 meos_qt::WindowClass commonClass(const wchar_t *name, WNDPROC proc, void (*create)(Window &, QWidget *)) {
   meos_qt::WindowClass windowClass;
   windowClass.name = name;
@@ -348,6 +523,7 @@ meos_qt::WindowClass commonClass(const wchar_t *name, WNDPROC proc, void (*creat
 void meos_qt::registerCommonControlClasses(const std::function<void(const WindowClass &)> &add) {
   add(commonClass(TOOLTIPS_CLASS, toolTipProc, createToolTip));
   add(commonClass(TOOLBARCLASSNAME, toolbarProc, createToolbar));
+  add(commonClass(WC_TABCONTROL, tabControlProc, createTabControl));
 }
 
 bool meos_qt::showToolTip(QWidget *receiver, QHelpEvent *event) {
@@ -395,6 +571,14 @@ bool meos_qt::showToolTip(QWidget *receiver, QHelpEvent *event) {
 
 void InitCommonControls() {}
 
+// The classes of this layer are registered with the first window class lookup,
+// so there is nothing to load. Windows fails only on a wrong structure size.
+BOOL InitCommonControlsEx(const INITCOMMONCONTROLSEX *controls) {
+  if (!controls || controls->dwSize != sizeof(INITCOMMONCONTROLSEX))
+    return FALSE;
+  return TRUE;
+}
+
 HIMAGELIST ImageList_Create(int cx, int cy, UINT /*flags*/, int /*initial*/, int /*grow*/) {
   if (cx <= 0 || cy <= 0)
     return nullptr;
@@ -416,6 +600,34 @@ HIMAGELIST ImageList_LoadImage(HINSTANCE instance, LPCWSTR bitmap, int cx, int /
   list->height = strip.height();
   addStrip(*list, strip, mask);
   return registerImageList(std::move(list));
+}
+
+// Adds every image of a bitmap that is as wide as the list, or all images of a
+// wider strip. A monochrome mask makes the pixels of its set bits transparent;
+// without a mask the alpha channel of the bitmap counts (ILC_COLOR32).
+int ImageList_Add(HIMAGELIST imageList, HBITMAP image, HBITMAP mask) {
+  const std::shared_ptr<ImageList> list = findImageList(imageList);
+  if (!list || list->width <= 0)
+    return -1;
+  QImage strip = meos_qt::bitmapPixmap(image).toImage();
+  if (strip.isNull() || strip.width() < list->width)
+    return -1;
+  if (mask) {
+    const QImage maskImage = meos_qt::bitmapPixmap(mask).toImage();
+    if (maskImage.size() != strip.size())
+      return -1;
+    strip = strip.convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < strip.height(); y++) {
+      auto *line = reinterpret_cast<QRgb *>(strip.scanLine(y));
+      for (int x = 0; x < strip.width(); x++) {
+        if (qGray(maskImage.pixel(x, y)) >= 128)
+          line[x] = 0;
+      }
+    }
+  }
+  const int first = int(list->images.size());
+  addStrip(*list, strip, CLR_NONE);
+  return int(list->images.size()) > first ? first : -1;
 }
 
 BOOL ImageList_Destroy(HIMAGELIST imageList) {

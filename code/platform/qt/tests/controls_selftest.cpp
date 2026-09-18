@@ -8,7 +8,8 @@
     (at your option) any later version. See LICENSE in the repository root.
 ************************************************************************/
 
-// Checks BUTTON, EDIT, COMBOBOX, LISTBOX, STATIC, tooltips and the toolbar of
+// Checks BUTTON, EDIT, COMBOBOX, LISTBOX, STATIC, tooltips, the toolbar and the
+// tab control of
 // code/platform/qt against the Windows behaviour MeOS relies on: which changes
 // notify the parent and in which order, focus, item data, multiple selection,
 // tab stops, subclassing, capture and cursors. User input is simulated with Qt
@@ -27,6 +28,7 @@
 #include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QStyle>
+#include <QTabBar>
 #include <QThread>
 #include <QToolBar>
 #include <QToolTip>
@@ -879,6 +881,157 @@ void testToolTips() {
 
 /* ------------------------------------------------------------------ */
 
+// A bitmap filled with one colour, for the image list.
+HBITMAP colourBitmap(int width, int height, COLORREF colour) {
+  const HDC screen = GetDC(nullptr);
+  const HDC memory = CreateCompatibleDC(screen);
+  const HBITMAP bitmap = CreateCompatibleBitmap(screen, width, height);
+  ReleaseDC(nullptr, screen);
+  const HGDIOBJ previous = SelectObject(memory, bitmap);
+  const HBRUSH brush = CreateSolidBrush(colour);
+  SelectObject(memory, brush);
+  SelectObject(memory, GetStockObject(NULL_PEN));
+  Rectangle(memory, 0, 0, width + 1, height + 1);
+  SelectObject(memory, previous);
+  DeleteObject(brush);
+  DeleteDC(memory);
+  return bitmap;
+}
+
+void testTabControl() {
+  HWND parent = createParent();
+  HWND tabs = createControl(parent, WC_TABCONTROL, 0, 0, 0, 300, 24, 200, L"tabs");
+  QTabBar *bar = widgetOf<QTabBar>(tabs);
+  CHECK(bar != nullptr);
+  if (!bar) {
+    DestroyWindow(parent);
+    return;
+  }
+
+  // Notifications arrive as WM_NOTIFY with an NMHDR; the id is in wParam as well.
+  // The selection is already the new one in TCN_SELCHANGE and still the old one
+  // in TCN_SELCHANGING.
+  std::vector<Notification> notes;
+  bool refuse = false;
+  int selectionWhileChanging = -2;
+  int selectionWhileChanged = -2;
+  parentHandler = [&](HWND, UINT message, WPARAM wParam, LPARAM lParam) -> LRESULT {
+    if (message != WM_NOTIFY)
+      return 0;
+    const auto *header = reinterpret_cast<const NMHDR *>(lParam);
+    notes.push_back(Notification{header->hwndFrom, int(header->idFrom), int(header->code)});
+    CHECK(int(wParam) == int(header->idFrom));
+    if (header->code == TCN_SELCHANGING) {
+      selectionWhileChanging = TabCtrl_GetCurSel(tabs);
+      return refuse ? TRUE : 0;
+    }
+    if (header->code == TCN_SELCHANGE)
+      selectionWhileChanged = TabCtrl_GetCurSel(tabs);
+    return 0;
+  };
+
+  // An empty control has no selection.
+  CHECK(TabCtrl_GetItemCount(tabs) == 0);
+  CHECK(TabCtrl_GetCurSel(tabs) == -1);
+
+  auto insert = [&](int index, const wchar_t *text, int image) {
+    TCITEM item = {};
+    item.mask = UINT(TCIF_TEXT | (image >= 0 ? TCIF_IMAGE : 0));
+    item.pszText = const_cast<LPWSTR>(text);
+    item.iImage = image;
+    return TabCtrl_InsertItem(tabs, index, &item);
+  };
+
+  // Inserting: the first tab becomes the selected one, without a notification.
+  // An index beyond the end appends.
+  CHECK(insert(0, L"Competition", -1) == 0);
+  CHECK(TabCtrl_GetCurSel(tabs) == 0);
+  CHECK(insert(1, L"Runners", -1) == 1);
+  CHECK(insert(9, L"Classes", -1) == 2);
+  CHECK(TabCtrl_GetItemCount(tabs) == 3);
+  CHECK(bar->tabText(1) == QString("Runners"));
+  CHECK(notes.empty());
+
+  // A selection by the application returns the previous index and notifies
+  // nothing; an invalid index changes nothing.
+  CHECK(TabCtrl_SetCurSel(tabs, 2) == 0);
+  CHECK(TabCtrl_GetCurSel(tabs) == 2);
+  CHECK(TabCtrl_SetCurSel(tabs, 7) == -1 && TabCtrl_GetCurSel(tabs) == 2);
+  CHECK(TabCtrl_SetCurSel(tabs, -1) == -1 && TabCtrl_GetCurSel(tabs) == 2);
+  CHECK(notes.empty());
+
+  // A click by the user: TCN_SELCHANGING, then TCN_SELCHANGE.
+  click(bar, bar->tabRect(0).center());
+  CHECK(TabCtrl_GetCurSel(tabs) == 0);
+  const Notification changing = {tabs, 200, int(TCN_SELCHANGING)};
+  const Notification changed = {tabs, 200, int(TCN_SELCHANGE)};
+  CHECK(notes.size() == 2);
+  CHECK(notes.size() == 2 && notes[0] == changing && notes[1] == changed);
+  CHECK(selectionWhileChanging == 2 && selectionWhileChanged == 0);
+
+  // A click on the selected tab changes nothing and notifies nothing.
+  notes.clear();
+  click(bar, bar->tabRect(0).center());
+  CHECK(notes.empty() && TabCtrl_GetCurSel(tabs) == 0);
+
+  // The parent refuses the change (MeOS does that for a page with unsaved input).
+  notes.clear();
+  refuse = true;
+  click(bar, bar->tabRect(1).center());
+  CHECK(notes.size() == 1 && notes[0].code == int(TCN_SELCHANGING));
+  CHECK(TabCtrl_GetCurSel(tabs) == 0);
+  refuse = false;
+
+  // Image list: an index per image, a strip adds one image per width, a
+  // monochrome mask makes the pixels of its set bits transparent.
+  HIMAGELIST list = ImageList_Create(16, 16, ILC_COLOR32, 2, 1);
+  CHECK(list != nullptr);
+  HBITMAP red = colourBitmap(16, 16, RGB(255, 0, 0));
+  HBITMAP strip = colourBitmap(32, 16, RGB(0, 255, 0));
+  // A monochrome mask: a set (white) bit is transparent.
+  HBITMAP mask = colourBitmap(16, 16, RGB(255, 255, 255));
+  CHECK(ImageList_Add(list, red, nullptr) == 0);
+  CHECK(ImageList_Add(list, strip, nullptr) == 1);
+  CHECK(ImageList_Add(list, red, mask) == 3);
+  CHECK(ImageList_Add(nullptr, red, nullptr) == -1);
+
+  CHECK(TabCtrl_SetImageList(tabs, list) == nullptr);
+  CHECK(bar->tabIcon(0).isNull());
+  CHECK(insert(3, L"Courses", 0) == 3);
+  CHECK(!bar->tabIcon(3).isNull());
+  CHECK(bar->tabIcon(3).pixmap(16, 16).toImage().pixelColor(8, 8) == QColor(255, 0, 0));
+  // The image added with the mask is transparent where the mask is set.
+  CHECK(insert(4, L"Controls", 3) == 4);
+  CHECK(bar->tabIcon(4).pixmap(16, 16).toImage().pixelColor(8, 8).alpha() == 0);
+  // A new image list replaces the icons and returns the previous one.
+  HIMAGELIST second = ImageList_Create(16, 16, ILC_COLOR32, 1, 1);
+  CHECK(ImageList_Add(second, colourBitmap(16, 16, RGB(0, 0, 255)), nullptr) == 0);
+  CHECK(TabCtrl_SetImageList(tabs, second) == list);
+  CHECK(bar->tabIcon(3).pixmap(16, 16).toImage().pixelColor(8, 8) == QColor(0, 0, 255));
+  CHECK(ImageList_Destroy(list) && ImageList_Destroy(second));
+
+  // The font of the row.
+  const HFONT font = CreateFont(20, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, 0, 0, 0, 0, L"Arial");
+  CHECK(SendMessage(tabs, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE) == 0);
+  CHECK(reinterpret_cast<HFONT>(SendMessage(tabs, WM_GETFONT, 0, 0)) == font);
+  CHECK(bar->font().family() == QString("Arial"));
+
+  // Deleting everything leaves no selection and notifies nothing.
+  notes.clear();
+  CHECK(TabCtrl_DeleteAllItems(tabs));
+  CHECK(TabCtrl_GetItemCount(tabs) == 0 && TabCtrl_GetCurSel(tabs) == -1);
+  CHECK(notes.empty());
+
+  parentHandler = nullptr;
+  DeleteObject(font);
+  DeleteObject(red);
+  DeleteObject(strip);
+  DeleteObject(mask);
+  CHECK(DestroyWindow(parent));
+}
+
+/* ------------------------------------------------------------------ */
+
 void testToolbarAndStatic() {
   HWND floater = CreateWindowEx(WS_EX_TOOLWINDOW, parentClass, L"Tools", WS_POPUP | WS_CAPTION, 100, 100, 300, 64,
                                 nullptr, nullptr, meos_qt::applicationInstance(), nullptr);
@@ -966,6 +1119,7 @@ int main(int argc, char **argv) {
   testCaptureAndCursor();
   testToolTips();
   testToolbarAndStatic();
+  testTabControl();
 
   if (failures) {
     std::fprintf(stderr, "%d check(s) failed\n", failures);

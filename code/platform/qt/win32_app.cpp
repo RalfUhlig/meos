@@ -18,6 +18,9 @@
 #include <QStyleFactory>
 #include <QThread>
 
+#include <map>
+#include <sstream>
+
 // Registers the fonts compiled in from fonts/meos_fonts.qrc (outside any namespace,
 // as Q_INIT_RESOURCE requires).
 static void initFontResources() {
@@ -160,8 +163,12 @@ BOOL GetMessage(LPMSG msg, HWND window, UINT filterMin, UINT filterMax) {
 
   meos_qt::GetMessageWait wait;
   for (;;) {
-    if (meos_qt::takePostedMessage(*msg, window, filterMin, filterMax))
+    if (meos_qt::takePostedMessage(*msg, window, filterMin, filterMax)) {
+      // WH_GETMESSAGE sees every message this call returns, and may change it.
+      if (meos_qt::hasHooks(WH_GETMESSAGE))
+        meos_qt::callHooks(WH_GETMESSAGE, HC_ACTION, PM_REMOVE, reinterpret_cast<LPARAM>(msg));
       return TRUE;
+    }
     if (quitPosted) {
       quitPosted = false;
       *msg = MSG{nullptr, WM_QUIT, WPARAM(quitExitCode), 0, GetTickCount(), {0, 0}, 0};
@@ -193,6 +200,89 @@ LRESULT DispatchMessage(const MSG *msg) {
   if (!target)
     return 0;
   return meos_qt::callWindowProc(target, msg->message, msg->wParam, msg->lParam);
+}
+
+/* ---------------------------------------------------------------------
+   Accelerators. The table comes from the ACCELERATORS block of meos.rc, which
+   cmake/Win32Resources.cmake embeds as a text resource of type 9 (RT_ACCELERATOR),
+   one entry "<flags> <key> <command>" per line.
+
+   Keyboard input does not pass the message queue in this layer: the canvas calls
+   the window procedure directly (win32_canvas.cpp), and TranslateMessage does
+   nothing. A key message therefore reaches TranslateAccelerator only if the
+   application puts one there itself. MeOS calls it in its main message loop, where
+   no key message arrives.
+   --------------------------------------------------------------------- */
+
+namespace {
+
+struct AcceleratorEntry {
+  WORD flags;
+  WORD key;
+  WORD command;
+};
+
+std::map<HACCEL, std::vector<AcceleratorEntry>> acceleratorTables;
+std::uintptr_t lastAcceleratorTable = 0;
+
+bool keyDown(int virtualKey) {
+  return (GetKeyState(virtualKey) & 0x8000) != 0;
+}
+
+} // namespace
+
+HACCEL LoadAccelerators(HINSTANCE instance, LPCWSTR tableName) {
+  const HRSRC resource = FindResource(instance, tableName, MAKEINTRESOURCE(9));
+  const HGLOBAL data = resource ? LoadResource(instance, resource) : nullptr;
+  const void *table = data ? LockResource(data) : nullptr;
+  if (!table)
+    return nullptr;
+
+  std::vector<AcceleratorEntry> entries;
+  std::istringstream text(std::string(static_cast<const char *>(table), SizeofResource(instance, resource)));
+  unsigned flags = 0;
+  unsigned key = 0;
+  unsigned command = 0;
+  while (text >> flags >> key >> command)
+    entries.push_back(AcceleratorEntry{WORD(flags), WORD(key), WORD(command)});
+  if (entries.empty()) {
+    SetLastError(ERROR_RESOURCE_NAME_NOT_FOUND);
+    return nullptr;
+  }
+  const auto handle = reinterpret_cast<HACCEL>(++lastAcceleratorTable);
+  acceleratorTables[handle] = std::move(entries);
+  return handle;
+}
+
+int TranslateAccelerator(HWND window, HACCEL table, LPMSG msg) {
+  const auto entries = acceleratorTables.find(table);
+  if (!window || !msg || entries == acceleratorTables.end())
+    return 0;
+
+  const bool keyMessage = msg->message == WM_KEYDOWN || msg->message == WM_SYSKEYDOWN;
+  const bool charMessage = msg->message == WM_CHAR || msg->message == WM_SYSCHAR;
+  const bool systemMessage = msg->message == WM_SYSKEYDOWN || msg->message == WM_SYSCHAR;
+  if (!keyMessage && !charMessage)
+    return 0;
+
+  for (const AcceleratorEntry &entry : entries->second) {
+    const bool virtualKey = (entry.flags & FVIRTKEY) != 0;
+    if (virtualKey != keyMessage || WORD(msg->wParam) != entry.key)
+      continue;
+    if (virtualKey) {
+      if (keyDown(VK_SHIFT) != ((entry.flags & FSHIFT) != 0) ||
+          keyDown(VK_CONTROL) != ((entry.flags & FCONTROL) != 0) ||
+          keyDown(VK_MENU) != ((entry.flags & FALT) != 0))
+        continue;
+    }
+    // A character with Alt arrives as a system message, as on Windows.
+    else if (systemMessage != ((entry.flags & FALT) != 0)) {
+      continue;
+    }
+    SendMessage(window, WM_COMMAND, MAKEWPARAM(entry.command, 1), 0);
+    return 1;
+  }
+  return 0;
 }
 
 void PostQuitMessage(int exitCode) {

@@ -20,6 +20,7 @@
 // Qt first: the Win32 headers define many short macros.
 #include <QApplication>
 #include <QCursor>
+#include <QIcon>
 #include <QPixmap>
 #include <QPointer>
 #include <QRegion>
@@ -66,6 +67,8 @@ struct WindowClass {
   HINSTANCE instance = nullptr;
   HCURSOR cursor = nullptr;
   HBRUSH background = nullptr;
+  // Icon of the windows of the class (hIcon, or hIconSm without it).
+  HICON icon = nullptr;
   // Creates the widgets of a window of a system class (a control). Windows of
   // registered classes get a canvas.
   void (*createWidgets)(Window &window, QWidget *parentWidget) = nullptr;
@@ -225,6 +228,9 @@ QStringList fileDialogFilters(LPCWSTR filter);
 
 // The image of a bitmap resource of the application, or a null image.
 QImage bitmapResource(HINSTANCE instance, LPCWSTR name);
+
+// The icon behind an HICON of LoadIcon, or a null icon.
+QIcon iconImage(HICON icon);
 
 /* ---------------------------------------------------------------------
    Messages, timers, hooks and keyboard state: win32_message.cpp
