@@ -129,6 +129,13 @@ std::unique_ptr<QApplication> meos_qt::createApplication(int &argc, char **argv)
   // Qt loads the first font.
   if (qEnvironmentVariableIsEmpty("FREETYPE_PROPERTIES"))
     qputenv("FREETYPE_PROPERTIES", "truetype:interpreter-version=35");
+  // No scaling by Qt: MeOS declares itself per-monitor DPI aware on Windows
+  // (meos_dpi_manifest.xml), so Windows hands it the screen in device pixels and
+  // leaves every size to the program. One MeOS pixel is one device pixel here as
+  // well, and the text size of MeOS stays the only zoom, as on Windows. Set before
+  // the application reads it, and only when the environment says nothing.
+  if (qEnvironmentVariableIsEmpty("QT_ENABLE_HIGHDPI_SCALING"))
+    qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
   auto app = std::make_unique<Application>(argc, argv);
 
   // MeOS places controls by its own measures; a desktop style with larger

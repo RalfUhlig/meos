@@ -710,6 +710,17 @@ std::shared_ptr<Font> meos_qt::createFont(const LOGFONT &logFont) {
   return result;
 }
 
+// The screen scaling of the desktop, 1.0 on an unscaled screen. Qt reports it as
+// the logical resolution of the primary screen (96 dpi is the unscaled value), the
+// same number Windows uses as the DPI of the program.
+static double screenScale() {
+  const QScreen *screen = QGuiApplication::primaryScreen();
+  if (!screen)
+    return 1.0;
+  const double dpi = screen->logicalDotsPerInch();
+  return dpi > 1 ? dpi / 96.0 : 1.0;
+}
+
 std::shared_ptr<Font> meos_qt::createStockFont(int index) {
   LOGFONT logFont = {};
   const wchar_t *face = nullptr;
@@ -737,7 +748,14 @@ std::shared_ptr<Font> meos_qt::createStockFont(int index) {
     face = L"Fixedsys";
     break;
   case DEFAULT_GUI_FONT:
-    logFont.lfHeight = -11;
+    // The only way the screen scaling of the desktop reaches MeOS: gdioutput
+    // takes the size of a check box and, while the text size is Normal, the font
+    // and the size of every control from this font (gdioutput::addCheckbox,
+    // ::getGUIFont, ::getInputDimension). Windows hands a per-monitor DPI aware
+    // program the stock font in the size of its DPI setting, so a check box comes
+    // out at 20 pixels at 175 % instead of the 11 of an unscaled screen. Qt
+    // reports the same setting as the logical resolution of the screen.
+    logFont.lfHeight = -qRound(11 * screenScale());
     face = L"MS Shell Dlg";
     break;
   default:

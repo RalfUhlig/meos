@@ -37,6 +37,8 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QStyleFactory>
+#include <QStyleOptionButton>
+#include <QStylePainter>
 #include <QStyledItemDelegate>
 #include <QTextCursor>
 #include <QWheelEvent>
@@ -241,6 +243,29 @@ protected:
   }
 };
 
+// A check box of MeOS never carries text (gdioutput draws the label itself) and is
+// created exactly as large as the box, as the Win32 BUTTON class draws it. Qt puts
+// its indicator at a size of its own next to a text area, so the box would be cut
+// off. Drawing the indicator over the whole client area follows Windows.
+class CheckBoxWidget : public ButtonWidget<QCheckBox> {
+public:
+  using ButtonWidget<QCheckBox>::ButtonWidget;
+
+protected:
+  void paintEvent(QPaintEvent *) override {
+    QStyleOptionButton option;
+    initStyleOption(&option);
+    option.rect = rect();
+    option.text.clear();
+    option.icon = QIcon();
+    QStylePainter painter(this);
+    painter.drawPrimitive(QStyle::PE_IndicatorCheckBox, option);
+  }
+
+  QSize sizeHint() const override { return size(); }
+  QSize minimumSizeHint() const override { return QSize(0, 0); }
+};
+
 int buttonType(const Window &window) {
   return int(window.style & BS_TYPEMASK);
 }
@@ -335,7 +360,7 @@ void createButton(Window &window, QWidget *parentWidget) {
 
   QAbstractButton *button;
   if (checkBox && !(window.style & BS_PUSHLIKE)) {
-    auto *widget = new ButtonWidget<QCheckBox>(frame);
+    auto *widget = new CheckBoxWidget(frame);
     widget->autoCheck = autoCheck;
     button = widget;
   }
@@ -657,17 +682,16 @@ public:
   QPointer<QComboBox> combo;
   HFONT font = nullptr;
   int border = 0;
-  // Height of the selection field (text height + 8, as Windows computes it) and
-  // of the whole control including the list.
+  // Height of the whole closed control, borders included, and of the list.
   int fieldHeight = 0;
   int itemHeight = 16;
   mutable int droppedHeight = 0;
 
-  // The window keeps the height of the selection field; the requested height
+  // The window keeps the height of the closed control; the requested height
   // sets the size of the list.
   int windowHeight(int requested) const override {
     droppedHeight = requested;
-    return fieldHeight + 2 * border;
+    return fieldHeight;
   }
 };
 
@@ -729,14 +753,18 @@ void applyComboFont(const Window &window, ComboControl &control) {
     return;
   combo->setFont(font->font);
   combo->view()->setFont(font->font);
-  control.fieldHeight = font->metrics.height + 8;
+  // Windows keeps a closed drop-down list at the height of an edit field with the
+  // same font, whatever height the application asks for; gdioutput puts edit
+  // fields and combo boxes next to each other and measures the fields itself the
+  // same way (gdioutput::getInputDimension).
+  control.fieldHeight = font->metrics.height + 4 + 2 * GetSystemMetrics(SM_CYEDGE);
   control.itemHeight = std::max(font->metrics.height, 1);
   (void)window;
 }
 
 void updateDroppedHeight(ComboControl &control) {
   if (control.combo) {
-    const int listHeight = control.droppedHeight - control.fieldHeight - 2 * control.border;
+    const int listHeight = control.droppedHeight - control.fieldHeight;
     control.combo->setMaxVisibleItems(std::max(1, (listHeight - 2) / control.itemHeight));
   }
 }

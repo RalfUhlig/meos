@@ -14,6 +14,7 @@
 #include <QHelpEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QResizeEvent>
 #include <QTabBar>
 #include <QTextDocument>
 #include <QToolBar>
@@ -391,6 +392,31 @@ public:
   }
 
 protected:
+  // A tab is as tall as the control, as on Windows: meos.cpp sets the height of
+  // the tab row itself (from the font height, meos.cpp WM_SIZE) and Qt would
+  // otherwise lay the tabs out in a height of its own and cut off what sticks
+  // out below.
+  QSize tabSizeHint(int index) const override {
+    QSize size = QTabBar::tabSizeHint(index);
+    size.setHeight(height());
+    return size;
+  }
+
+  QSize minimumTabSizeHint(int index) const override {
+    QSize size = QTabBar::minimumTabSizeHint(index);
+    size.setHeight(height());
+    return size;
+  }
+
+  void resizeEvent(QResizeEvent *event) override {
+    QTabBar::resizeEvent(event);
+    // tabSizeHint depends on the height of the control, so the tab rectangles
+    // have to be computed again. Setting the icon size is the way to ask QTabBar
+    // for that from outside; the size itself does not change.
+    if (event->oldSize().height() != event->size().height())
+      QTabBar::setIconSize(iconSize());
+  }
+
   void mousePressEvent(QMouseEvent *event) override {
     if (event->button() == Qt::LeftButton) {
       selectByUser(tabAt(event->position().toPoint()));

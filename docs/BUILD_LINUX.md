@@ -157,6 +157,13 @@ competition page (Debug builds show them anyway).
 
 Notes for the port:
 
+- **Screen scaling.** MeOS is not scaled by the desktop: one MeOS pixel is one device pixel, as on
+  Windows, where MeOS declares itself per-monitor DPI aware and takes every size into its own hands
+  (`QT_ENABLE_HIGHDPI_SCALING=0`, set by the program unless the environment already says otherwise).
+  The **text size** of MeOS (competition page, *Programinställningar*) is therefore the way to make
+  the user interface larger on a dense screen, as it is on Windows; MeOS picks a starting value from
+  the size of the screen. Only the size of a check box follows the screen scaling of the desktop,
+  because MeOS takes it from the system font, as it does on Windows.
 - **X11.** Window position and size from the settings (`xpos`, `ypos`, `xsize`, `ysize`) work under
   X11 and XWayland. Start with `QT_QPA_PLATFORM=xcb` under a Wayland session.
 - **The splash screen stays empty.** It is a window that MeOS paints with `UpdateWindow` and then

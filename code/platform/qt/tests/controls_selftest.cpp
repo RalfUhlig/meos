@@ -469,18 +469,22 @@ void testComboBox() {
   QComboBox *combo = widgetOf<QComboBox>(list);
   CHECK(combo && !combo->isEditable());
 
-  // The window keeps the height of the selection field: text height + 8.
+  // A closed drop-down list keeps the height of an edit field with the same font,
+  // whatever height the application asks for: text height + 4 + two edges, the
+  // same measure gdioutput::getInputDimension uses for its input fields, which it
+  // places next to combo boxes. To be confirmed against Windows in stage 1.3.7.
   HDC dc = GetDC(nullptr);
   SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
   SIZE cell;
   GetTextExtentPoint32(dc, L"M", 1, &cell); // cy is tmHeight
   ReleaseDC(nullptr, dc);
+  const int closedHeight = cell.cy + 4 + 2 * GetSystemMetrics(SM_CYEDGE);
   RECT rect;
   GetWindowRect(list, &rect);
-  CHECK(rect.bottom - rect.top == cell.cy + 8 + 6);
+  CHECK(rect.bottom - rect.top == closedHeight);
   SetWindowPos(list, nullptr, 0, 0, 170, 300, SWP_NOMOVE | SWP_NOZORDER);
   GetWindowRect(list, &rect);
-  CHECK(rect.right - rect.left == 170 && rect.bottom - rect.top == cell.cy + 8 + 6);
+  CHECK(rect.right - rect.left == 170 && rect.bottom - rect.top == closedHeight);
 
   events.clear();
   CHECK(SendMessage(list, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(L"Alpha")) == 0);
@@ -1015,6 +1019,18 @@ void testTabControl() {
   CHECK(SendMessage(tabs, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE) == 0);
   CHECK(reinterpret_cast<HFONT>(SendMessage(tabs, WM_GETFONT, 0, 0)) == font);
   CHECK(bar->font().family() == QString("Arial"));
+
+  // A tab is as tall as the row, whatever height the application gives it:
+  // meos.cpp sets the height of the tab row from the font height, and a tab that
+  // keeps a height of its own would be cut off (stage 1.3.3, finding 10).
+  for (int height : {24, 30, 48}) {
+    SetWindowPos(tabs, nullptr, 0, 0, 300, height, SWP_NOMOVE | SWP_NOZORDER);
+    RECT row;
+    GetClientRect(tabs, &row);
+    CHECK(row.bottom - row.top == height);
+    CHECK(bar->tabRect(0).height() == height);
+    CHECK(bar->tabRect(0).bottom() < height);
+  }
 
   // Deleting everything leaves no selection and notifies nothing.
   notes.clear();
