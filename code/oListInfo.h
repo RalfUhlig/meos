@@ -617,7 +617,7 @@ protected:
   wstring Name;
   EBaseType listType;
   EBaseType listSubType;
-  SortOrder sortOrder;
+  SortOrder sortOrder = SortByName;
      
   bool calcResults;
   bool calcCourseClassResults;

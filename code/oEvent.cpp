@@ -4316,7 +4316,7 @@ void oEvent::clear()
   if (isMainEvent)
     gdibase.getTabs().clearCompetitionData();
   
-  machineContainer.release();
+  machineContainer.reset();
   renderMaps.reset();
 
   MeOSUtil::useHourFormat = getPropertyInt("UseHourFormat", 1) != 0;

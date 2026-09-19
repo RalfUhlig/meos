@@ -122,6 +122,48 @@ cmake --preset linux-release && cmake --build --preset linux-release && ctest --
 The tests need no display: the window layer tests run with Qt's `offscreen` platform plugin, which
 comes with `qt6-base-dev`.
 
+## Running MeOS
+
+```bash
+cd <folder with the installation files>   # sportident.cardsystem, the lists, baseclass.xml …
+build/linux-debug/code/meos [-nosplash] [-test] [-s]
+```
+
+MeOS looks for its files in three places, and the Linux port keeps the Windows behaviour
+(`plans/linux-port-1.3-app-frame.md` says where they belong in an installation):
+
+| What | Where MeOS looks |
+|---|---|
+| `sportident.cardsystem` | the **current folder** |
+| lists (`*.lxml`, `*.listdef`) | the folder of the program, the current folder, the data folder |
+| `clubnamemap.csv` | the **data folder**, then the folder of the program — *not* the current folder |
+| competitions (`*.meos`), backups, `database.*`, settings (`meoswpref.xml`) | the data folder |
+
+The **data folder** is `$XDG_DATA_HOME/Meos`, that is `~/.local/share/Meos` by default. It is
+created at the first start. Point `XDG_DATA_HOME` somewhere else to keep a test run away from a
+real installation:
+
+```bash
+XDG_DATA_HOME=/tmp/meos-test build/linux-debug/code/meos
+```
+
+`sportident.cardsystem` and `clubnamemap.csv` come with the Windows installer, not with the
+sources, and are not part of this repository (see [GUI workbench](#gui-workbench)). Without
+`clubnamemap.csv` in the data folder MeOS reports an error at startup; copy it there once.
+
+Switches, as on Windows: `-s` copies the installation files into the data folder and exits,
+`-nosplash` skips the splash screen, `-test` shows the buttons of the test harness on the
+competition page (Debug builds show them anyway).
+
+Notes for the port:
+
+- **X11.** Window position and size from the settings (`xpos`, `ypos`, `xsize`, `ysize`) work under
+  X11 and XWayland. Start with `QT_QPA_PLATFORM=xcb` under a Wayland session.
+- **The splash screen stays empty.** It is a window that MeOS paints with `UpdateWindow` and then
+  keeps for a second without fetching a message. The Qt backend paints it into its backing store,
+  but nothing copies that to the screen while no message loop runs, so an empty rectangle is
+  shown. `-nosplash` avoids it; see the findings of stage 1.3.3.
+
 ## GUI workbench
 
 `build/<preset>/code/meos_gui_workbench` shows real MeOS pages (`gdioutput`) without the MeOS

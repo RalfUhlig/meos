@@ -192,10 +192,9 @@ if(NOT WIN32)
   meos_apply_settings(meos_gui)
   target_link_libraries(meos_gui PUBLIC PNG::PNG ZLIB::ZLIB PkgConfig::MEOS_MINIZIP)
 
-  # The application frame (stage 1.3.1): it compiles against the Win32 declarations,
-  # like meos_si in stage 1.1. The program target follows in 1.3.3, once the tab
-  # control, icons, accelerators and the splash screen are implemented (1.3.2). It
-  # defines the same globals as meos_app_frame, so no program links both.
+  # The application frame (stage 1.3.1). It defines the same globals as meos_app_frame,
+  # so no program links both: MeOS itself links meos_app, every other program
+  # meos_app_frame.
   add_library(meos_app OBJECT meos.cpp)
   meos_apply_settings(meos_app)
 
@@ -250,13 +249,27 @@ if(NOT WIN32)
     platform/qt/workbench/demo_competition.cpp)
   meos_apply_settings(meos_app_frame)
 
-  # Links all of MeOS except meos.cpp: object libraries do not pass their objects on,
-  # so every program lists them.
-  function(meos_link_meos target)
+  # Links all of MeOS except the application frame: object libraries do not pass their
+  # objects on, so every program lists them. The frame is the one part that differs:
+  # MeOS links meos_app (meos.cpp), every other program meos_app_frame.
+  function(meos_link_meos_without_frame target)
     target_link_libraries(${target} PRIVATE
-      meos_core meos_gui meos_net meos_si meos_app_frame meos_win32ui meos_resources meos_platform
+      meos_core meos_gui meos_net meos_si meos_win32ui meos_resources meos_platform
       meos_win32ui_main)
   endfunction()
+
+  function(meos_link_meos target)
+    target_link_libraries(${target} PRIVATE meos_app_frame)
+    meos_link_meos_without_frame(${target})
+  endfunction()
+
+  # MeOS itself (stage 1.3.3). The program has no source of its own; WinMain is in
+  # meos.cpp. Programs start in the folder with the installation files, as the shortcut
+  # does on Windows (docs/BUILD_LINUX.md).
+  add_executable(meos)
+  meos_apply_settings(meos)
+  target_link_libraries(meos PRIVATE meos_app)
+  meos_link_meos_without_frame(meos)
 
   # GUI workbench (stage 1.2.6): real gdioutput pages on the Qt backend, for manual
   # checks and the comparison with Windows. Not part of a MeOS installation.

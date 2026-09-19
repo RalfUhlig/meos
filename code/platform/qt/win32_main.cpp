@@ -39,7 +39,9 @@ std::vector<char> commandLine(int argc, char **argv) {
 } // namespace
 
 int main(int argc, char **argv) {
-  const std::unique_ptr<QApplication> app = meos_qt::createApplication(argc, argv);
+  // Static, so that exit() destroys it too: WinMain leaves through exit() for the
+  // setup switch -s, and a QApplication left behind shows up as leaked memory.
+  static const std::unique_ptr<QApplication> app = meos_qt::createApplication(argc, argv);
   std::vector<char> arguments = commandLine(argc, argv);
   return WinMain(meos_qt::applicationInstance(), nullptr, arguments.data(), SW_SHOWDEFAULT);
 }
