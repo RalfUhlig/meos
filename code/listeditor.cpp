@@ -1166,6 +1166,15 @@ void ListEditor::editListPost(gdioutput &gdi, const MetaListPost &mlp, int id) {
     }
   }
 
+  for (size_t k = 0; k < types.size(); k++) {
+    // Internal rewrite target of oListInfo::transformTypes, never stored.
+    if (types[k].second == lRunnerCourseFamily) {
+      swap(types[k], types.back());
+      types.pop_back();
+      break;
+    }
+  }
+
   sort(types.begin(), types.end());
   gdi.pushX();
   gdi.fillRight();

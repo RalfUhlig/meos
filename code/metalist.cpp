@@ -2090,6 +2090,12 @@ void MetaListPost::deserialize(const xmlobject &xml) {
   }
 
   type = MetaList::symbolToType[tp];
+  if (type == lRunnerCourseFamily) {
+    // Internal type: oListInfo::transformTypes applies it per sort order when
+    // rendering. Mapping it back on load keeps stored definitions readable by
+    // a MeOS build that does not know the symbol.
+    type = lRunnerCourse;
+  }
   xml.getObjectString("Text", text);
   xml.getObjectString("ResultModule", resultModule);
   if (xml.getObject("Leg"))
