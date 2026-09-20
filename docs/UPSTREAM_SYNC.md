@@ -16,7 +16,8 @@ reference and not part of anything intended to go back upstream.
   capability, and one concern per commit so single fixes can be left out. Merged into `local`.
 - **`feature/*`** (e.g. `feature/additional-race`) — personal features, not intended for
   upstream. Branched off `local` (or off the feature they build on) and merged back into
-  `local`.
+  `local`, then deleted: `local` keeps the commits reachable, and the merge commit keeps the
+  name. Branch off `local` again for further work rather than reviving the old branch.
 - **`linux`** — integration branch of the native Linux port (plan and status:
   `plans/linux-port.md`). Currently based on `master`, i.e. upstream plus the port without
   `local`-only changes. Merges `master` after every upstream release.
@@ -29,7 +30,11 @@ directory under `refs/heads`.
 
 ### Branches that were given up
 
-Removed branches are kept as annotated `archive/*` tags, so their commits stay reachable.
+Branches given up without being merged are kept as annotated `archive/*` tags, so their commits
+stay reachable. A branch that was merged into `local` beforehand needs no tag and is simply
+deleted — on 2026-09-20 that was `feature/course-family-results`, `feature/additional-race` and
+`feature/duplicate-runner`. To get such a branch back, create it from the second parent of its
+merge commit, e.g. `git branch feature/additional-race bba4d97^2`.
 
 On 2026-09-15 `local` was rebuilt from `master`. Features used to branch off `master` for
 possible upstream PRs while also building on each other in `local`, and the same conflicts had
@@ -120,6 +125,6 @@ git merge master
 
 ## New personal changes
 
-Features are branched off `local` and merged back into it; small changes go directly on
-`local`. Never on `master`, and never on a `bugfix/*` branch. To bring an open feature branch up
-to date, merge `local` into it.
+Features are branched off `local` and merged back into it, and the branch is deleted once it is
+merged; small changes go directly on `local`. Never on `master`, and never on a `bugfix/*`
+branch. To bring an open feature branch up to date, merge `local` into it.
