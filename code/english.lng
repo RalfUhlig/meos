@@ -1488,7 +1488,6 @@ RunnerClassCourseTimeAfter = Time behind on course within class
 RunnerClub = Competitor's club
 RunnerCompleteName = Complete name
 RunnerCourse = Competitor's course
-RunnerCourseFamily = Competitor's course (result group)
 RunnerCoursePlace = Competitor's place on course
 RunnerEntryDate = Competitor's entry date
 RunnerEntryTime = Competitor's entry time

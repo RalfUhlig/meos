@@ -1493,7 +1493,6 @@ RunnerClassCourseTimeAfter = Tid efter på bana inom klass
 RunnerClub = Deltagarklubb
 RunnerCompleteName = Fullständigt namn
 RunnerCourse = Deltagares bana
-RunnerCourseFamily = Deltagares bana (resultatgrupp)
 RunnerCoursePlace = Deltagares placering på banan
 RunnerEntryDate = Deltagares anmälningsdatum
 RunnerEntryTime = Deltagares anmälningstid
