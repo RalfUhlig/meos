@@ -3228,6 +3228,39 @@ bool TabSI::processUnmatched(gdioutput& gdi, const SICard& csic, bool silent) {
   else
     rout.warnings += lang.tl("Målstämpling saknas.");
 
+  // Without interactive readout there is no dialog to fall back on, so this line is the
+  // only place where the operator learns why the card was not matched. A card number that
+  // does belong to somebody is the common case: the competitor already holds a result, or
+  // has no class. Name them rather than leaving it at "unknown card".
+  vector<pRunner> byCardNo;
+  oe->getRunnersByCardNo(sic.CardNumber, false, oEvent::CardLookupProperty::Any, byCardNo);
+
+  pRunner withResult = nullptr, withoutClass = nullptr;
+  for (pRunner r : byCardNo) {
+    if (r->getCard()) {
+      if (!withResult || withResult->getFinishTime() < r->getFinishTime())
+        withResult = r; // Take the last finisher, as for the split printout
+    }
+    else if (!r->getClassId(false) && !withoutClass)
+      withoutClass = r;
+  }
+
+  if (pRunner owner = withResult ? withResult : withoutClass) {
+    wstring id = owner->getCompleteIdentification(oRunner::IDType::OnlyThis);
+    if (!owner->getClass(true).empty())
+      id += L", " + owner->getClass(true);
+
+    rout.statusline = withResult ?
+      lang.tl(L"Brickan tillhör X som redan har ett inläst resultat.#" + id) :
+      lang.tl(L"Brickan tillhör X som saknar klass.#" + id);
+
+    if (!interactiveReadout) {
+      if (!rout.warnings.empty())
+        rout.warnings += L" ";
+      rout.warnings += lang.tl("Aktivera interaktiv inläsning för att knyta brickan till en deltagare.");
+    }
+  }
+
   //Update to SQL-source
   card->synchronize();
 
