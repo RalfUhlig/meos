@@ -2114,7 +2114,11 @@ void MetaListPost::deserialize(const xmlobject &xml) {
       alignType = lString;
       alignWithText = at;
     }
-    else alignType = MetaList::symbolToType[at];
+    else {
+      alignType = MetaList::symbolToType[at];
+      if (alignType == lRunnerCourseFamily)
+        alignType = lRunnerCourse; // Follows the post type mapped above.
+    }
   }
 
   packPrevious = xml.getObjectBool("PackPrevious");
