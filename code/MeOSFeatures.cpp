@@ -48,7 +48,7 @@ MeOSFeatures::MeOSFeatures(void)
   add(RunnerDb, L"RD", "Club and runner database").require(Clubs);
   addHead("Teams and forking");
   add(ForkedIndividual, L"FO", "Forked individual courses");
-  add(MergeCourseVariants, L"MV", "Course based results").require(ForkedIndividual);
+  add(MergeCourseVariants, L"MV", "Course based results");
   add(Patrol, L"PT", "Patrols");
   add(Relay, L"RL", "Relays");
   add(MultipleRaces, L"MR", "Several races for a runner").require(Relay);
