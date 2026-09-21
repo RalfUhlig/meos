@@ -3439,7 +3439,7 @@ void oClass::clearSplitAnalysis()
   tCourseLegLeaderTime.clear();
   tCourseAccLegLeaderTime.clear();
 
-  if (tLegLeaderTime)
+  if (tLegTimeToPlace)
     delete tLegTimeToPlace;
   tLegTimeToPlace = 0;
 

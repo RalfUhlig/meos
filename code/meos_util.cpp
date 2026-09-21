@@ -1484,7 +1484,7 @@ int charDist(const wchar_t *b, int len, int origin, wchar_t c)
   int bound = max(1, min(len/2, 4));
   for (int k = 0;k<bound; k++) {
     i = origin - k;
-    if (i>0 && b[i] == c)
+    if (i>0 && i<len && b[i] == c)
       return -k;
     i = origin + k;
     if (i<len && b[i] == c)

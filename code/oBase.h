@@ -86,7 +86,7 @@ private:
   // Changed in client, not yet sent to server
   bool changed;
   // Changed in client, silent mode, should not be sent to server
-  bool transientChanged;
+  bool transientChanged = false;
   bool localObject;
 
 protected:
