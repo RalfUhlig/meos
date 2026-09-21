@@ -728,6 +728,18 @@ void testTextPixels() {
   CHECK(TextOut(dib.dc, 20, 10, L"Hello", 5));
   CHECK(dib.ink() == QRect(20, 10, size.cx, size.cy) && dib.pixel(20, 10) == green);
   SetBkMode(dib.dc, TRANSPARENT);
+
+  // A COLORREF of no defined kind draws black, as on Windows (MeOS passes
+  // CLR_INVALID for a check box label it enables again).
+  dib.fill(white);
+  SetTextColor(dib.dc, CLR_INVALID);
+  CHECK(TextOut(dib.dc, 20, 10, L"Hello", 5));
+  ink = dib.ink();
+  bool blackInk = false;
+  for (int y = ink.top(); y <= ink.bottom() && !ink.isEmpty(); y++)
+    for (int x = ink.left(); x <= ink.right(); x++)
+      blackInk = blackInk || dib.pixel(x, y) == black;
+  CHECK(blackInk);
   SetTextColor(dib.dc, black);
 
   // DrawText clips to the rectangle unless DT_NOCLIP is given.

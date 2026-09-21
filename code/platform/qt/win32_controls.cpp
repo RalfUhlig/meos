@@ -434,7 +434,7 @@ void queryEditColors(QWidget *widget) {
   // Without a brush, DefWindowProc's colours apply.
   if (brush) {
     if (const std::shared_ptr<meos_qt::DeviceContext> context = meos_qt::findDc(dc))
-      text = meos_qt::toQColor(context->textColor);
+      text = meos_qt::toTextQColor(context->textColor);
     const auto handle = reinterpret_cast<HGDIOBJ>(brush);
     if (const auto object = meos_qt::findGdiObject<meos_qt::Brush>(handle, meos_qt::GdiType::Brush)) {
       if (!object->null) {

@@ -15,7 +15,7 @@ Other distributions have not been tested; package names refer to Ubuntu/Debian.
 
 ```bash
 sudo apt install build-essential cmake ninja-build pkg-config \
-  qt6-base-dev qt6-multimedia-dev libxkbcommon-dev \
+  qt6-base-dev qt6-multimedia-dev qt6-translations-l10n libxkbcommon-dev \
   libhpdf-dev libpng-dev zlib1g-dev libminizip-dev \
   libmariadb-dev libmariadb-dev-compat libcurl4-openssl-dev libasio-dev libssl-dev \
   fonts-dejavu-core fonts-liberation ttf-mscorefonts-installer
@@ -28,6 +28,7 @@ sudo apt install build-essential cmake ninja-build pkg-config \
 | `ninja-build` | Generator used by all presets | now | 1.11.1 |
 | `pkg-config` | Locating minizip and MariaDB | now | 1.8.1 |
 | `qt6-base-dev` | GUI backend (Qt Widgets, Gui, Core), printing, clipboard, the `offscreen` platform plugin used by the tests | stage 1 | Qt 6.4.2 |
+| `qt6-translations-l10n` | Buttons of message boxes and system dialogs in the language of the system, as on Windows (English without it) | stage 1 | 6.4.2 |
 | `libxkbcommon-dev` | Silences `Could NOT find XKB` while configuring Qt | stage 1 | 1.6.0 |
 | `libhpdf-dev` | PDF export (libharu) | now | 2.3.0 |
 | `libpng-dev` | Images | now | 1.6.43 |

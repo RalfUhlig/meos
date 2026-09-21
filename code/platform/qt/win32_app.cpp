@@ -13,10 +13,14 @@
 #include <QFontDatabase>
 #include <QHelpEvent>
 #include <QKeyEvent>
+#include <QLibraryInfo>
+#include <QLocale>
 #include <QMouseEvent>
 #include <QPalette>
+#include <QProxyStyle>
 #include <QStyleFactory>
 #include <QThread>
+#include <QTranslator>
 
 #include <map>
 #include <sstream>
@@ -82,6 +86,31 @@ public:
   }
 };
 
+// Fusion with the behaviour of the Windows controls where Fusion differs.
+class WindowsStyle : public QProxyStyle {
+public:
+  WindowsStyle() : QProxyStyle(QStyleFactory::create(QStringLiteral("Fusion"))) {}
+
+  int styleHint(StyleHint hint, const QStyleOption *option, const QWidget *widget,
+                QStyleHintReturn *returnData) const override {
+    // A drop-down list opens below the combo box, not over it with the current
+    // item in its place.
+    if (hint == SH_ComboBox_Popup)
+      return 0;
+    return QProxyStyle::styleHint(hint, option, widget, returnData);
+  }
+
+  int pixelMetric(PixelMetric metric, const QStyleOption *option, const QWidget *widget) const override {
+    // Toolbar buttons sit side by side without a gap or margin. MeOS makes its
+    // floating toolbar exactly as wide as the buttons (TB_GETBUTTONSIZE times
+    // their number); with Qt's spacing the last ones would move behind the
+    // extension button.
+    if (metric == PM_ToolBarItemSpacing || metric == PM_ToolBarItemMargin || metric == PM_ToolBarFrameWidth)
+      return 0;
+    return QProxyStyle::pixelMetric(metric, option, widget);
+  }
+};
+
 // Qt colours from the Windows 10 system colours (see GetSysColor), so that the
 // controls do not follow a dark desktop theme either.
 QPalette windowsPalette() {
@@ -140,8 +169,16 @@ std::unique_ptr<QApplication> meos_qt::createApplication(int &argc, char **argv)
 
   // MeOS places controls by its own measures; a desktop style with larger
   // margins would make them overlap.
-  QApplication::setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+  QApplication::setStyle(new WindowsStyle);
   QApplication::setPalette(windowsPalette());
+
+  // The system dialogs (message boxes, file dialogs) speak the language of the
+  // system, as on Windows, not the language chosen in MeOS. Without the Qt
+  // translations installed they stay English.
+  auto *translator = new QTranslator(app.get());
+  if (translator->load(QLocale::system(), QStringLiteral("qtbase"), QStringLiteral("_"),
+                       QLibraryInfo::path(QLibraryInfo::TranslationsPath)))
+    QCoreApplication::installTranslator(translator);
 
   // Selawik stands in for Segoe UI, the default font of MeOS.
   initFontResources();

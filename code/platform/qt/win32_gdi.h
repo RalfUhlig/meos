@@ -196,6 +196,17 @@ inline QColor toQColor(COLORREF color) {
   return QColor(GetRValue(color), GetGValue(color), GetBValue(color));
 }
 
+// The colour text is drawn in. A COLORREF whose high byte is none of the defined
+// kinds (RGB 0x00, PALETTEINDEX 0x01, PALETTERGB 0x02, DIBINDEX 0x10) is drawn
+// black, as Windows does: MeOS passes CLR_INVALID (colorDefault) as the colour of
+// a check box label it enables again, and on Windows that label turns black.
+inline QColor toTextQColor(COLORREF color) {
+  const unsigned kind = color >> 24;
+  if (kind != 0x00 && kind != 0x01 && kind != 0x02 && kind != 0x10)
+    return QColor(0, 0, 0);
+  return toQColor(color);
+}
+
 inline QRect toQRect(const RECT &rect) {
   return QRect(QPoint(rect.left, rect.top), QPoint(rect.right - 1, rect.bottom - 1));
 }

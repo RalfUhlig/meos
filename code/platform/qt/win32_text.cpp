@@ -343,7 +343,7 @@ int textWidth(const Font &font, const QString &text) {
 void drawTextLine(QPainter &painter, const DeviceContext &dc, const Font &font, int x, int y, const QString &text,
                   int width, int underline) {
   const FontMetrics &m = font.metrics;
-  const QColor color = meos_qt::toQColor(dc.textColor);
+  const QColor color = meos_qt::toTextQColor(dc.textColor);
   painter.save();
   painter.translate(x, y);
   if (font.logFont.lfEscapement)

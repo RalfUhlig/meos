@@ -27,6 +27,7 @@
 #include <QListWidget>
 #include <QMouseEvent>
 #include <QPlainTextEdit>
+#include <QProxyStyle>
 #include <QStyle>
 #include <QTabBar>
 #include <QThread>
@@ -192,7 +193,10 @@ void testButtons() {
   HWND autoCheck = createControl(parent, L"button", BS_AUTOCHECKBOX, 10, 40, 16, 16, 102);
   HWND pushLike = createControl(parent, L"Button", BS_CHECKBOX | BS_PUSHLIKE | BS_NOTIFY, 10, 70, 80, 24, 103, L"State");
   CHECK(push && autoCheck && pushLike);
-  CHECK(QApplication::style()->name().compare(QStringLiteral("fusion"), Qt::CaseInsensitive) == 0);
+  // Fusion, with drop-down lists below the combo box as on Windows.
+  const auto *proxy = qobject_cast<const QProxyStyle *>(QApplication::style());
+  CHECK(proxy && proxy->baseStyle()->name().compare(QStringLiteral("fusion"), Qt::CaseInsensitive) == 0);
+  CHECK(QApplication::style()->styleHint(QStyle::SH_ComboBox_Popup) == 0);
 
   CHECK(windowText(push) == L"Push" && widgetOf<QAbstractButton>(push)->text() == QStringLiteral("Push"));
   SetWindowText(push, L"Other");
@@ -1087,6 +1091,15 @@ void testToolbarAndStatic() {
   events.clear();
   bar->actions()[1]->trigger();
   CHECK((notifications() == std::vector<Notification>{{toolbar, 1014, BN_CLICKED}}));
+  // The buttons sit side by side without gaps: MeOS makes its floating toolbar
+  // exactly the button width times the number of buttons wide.
+  SetWindowPos(toolbar, nullptr, 0, 0, 2 * LOWORD(size), 34, SWP_NOZORDER);
+  ShowWindow(toolbar, SW_SHOW);
+  ShowWindow(floater, SW_SHOW);
+  QCoreApplication::processEvents();
+  QWidget *printButton = bar->widgetForAction(bar->actions()[1]);
+  CHECK(copyButton->isVisible() && printButton->isVisible());
+  CHECK(copyButton->x() == 0 && printButton->x() == LOWORD(size));
   CHECK(ImageList_Destroy(images) && !ImageList_Destroy(images));
   CHECK(DestroyWindow(floater));
 
