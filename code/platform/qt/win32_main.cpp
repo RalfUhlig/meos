@@ -41,7 +41,13 @@ std::vector<char> commandLine(int argc, char **argv) {
 int main(int argc, char **argv) {
   // Static, so that exit() destroys it too: WinMain leaves through exit() for the
   // setup switch -s, and a QApplication left behind shows up as leaked memory.
-  static const std::unique_ptr<QApplication> app = meos_qt::createApplication(argc, argv);
+  static std::unique_ptr<QApplication> app = meos_qt::createApplication(argc, argv);
   std::vector<char> arguments = commandLine(argc, argv);
-  return WinMain(meos_qt::applicationInstance(), nullptr, arguments.data(), SW_SHOWDEFAULT);
+  const int result = WinMain(meos_qt::applicationInstance(), nullptr, arguments.data(), SW_SHOWDEFAULT);
+  // Destroyed here rather than among the static objects: Qt creates some of its
+  // own (the icon cache of QIcon) only while the program runs, so they are
+  // destroyed before a static QApplication, whose destructor still cleans them
+  // up and crashed.
+  app.reset();
+  return result;
 }
