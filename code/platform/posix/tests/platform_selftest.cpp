@@ -20,6 +20,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -55,6 +56,42 @@ void testUtf8() {
   CHECK(meos_compat::utf8ToWide(utf8.c_str()) == text);
   CHECK(meos_compat::utf8ToWide("a\xFF" "b") == L"a\uFFFDb");
   CHECK(meos_compat::utf8ToWide("\xE2\x82") == L"\uFFFD\uFFFD");
+}
+
+// The wide string functions work on text at any address (wide_string_functions.cpp):
+// MeOS keeps text fields in byte arrays, and glibc's vectorised versions assume
+// wchar_t aligned to four bytes.
+void testUnalignedWideStrings() {
+  alignas(64) static unsigned char buffer[1024];
+  alignas(64) static unsigned char target[1024];
+  for (int offset = 1; offset < 4; offset++) {
+    for (int length = 0; length <= 70; length++) {
+      std::wstring text;
+      for (int k = 0; k < length; k++)
+        text.push_back(wchar_t(L'a' + (k * 7 + length) % 26));
+      wchar_t *s = reinterpret_cast<wchar_t *>(buffer + offset);
+      std::memset(buffer, 0x55, sizeof(buffer));
+      std::memcpy(s, text.c_str(), (text.size() + 1) * sizeof(wchar_t));
+      const bool ok = wcslen(s) == size_t(length) && wcsnlen(s, 1000) == size_t(length) &&
+                      std::wstring(s).size() == size_t(length) && wcscmp(s, text.c_str()) == 0 &&
+                      wcsncmp(s, text.c_str(), 1000) == 0 && std::wstring(s) == text;
+      CHECK(ok);
+      if (!ok)
+        return;
+      if (length > 0) {
+        const wchar_t last = text.back();
+        CHECK(wcsrchr(s, last) == s + text.rfind(last));
+        CHECK(wcschr(s, last) == s + text.find(last));
+        CHECK(wmemchr(s, last, length) == s + text.find(last));
+        CHECK(wmemcmp(s, text.c_str(), length) == 0);
+      }
+      CHECK(wcschr(s, L'\0') == s + length && wcschr(s, L'#') == nullptr);
+      wchar_t *copy = reinterpret_cast<wchar_t *>(target + (4 - offset));
+      CHECK(wcscpy(copy, s) == copy && std::wstring(copy) == text);
+      CHECK(wcscat(copy, L"xyz") == copy && std::wstring(copy) == text + L"xyz");
+      CHECK(wmemset(copy, L'q', length) == copy && std::wstring(copy) == std::wstring(length, L'q') + L"xyz");
+    }
+  }
 }
 
 void testCodePages() {
@@ -691,6 +728,7 @@ int main() {
   testWideFormat();
   testUtf8();
   testCodePages();
+  testUnalignedWideStrings();
   testTime();
   testDosTimes();
   testPathsAndIntegers();

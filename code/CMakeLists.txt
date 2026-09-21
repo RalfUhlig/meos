@@ -158,9 +158,14 @@ if(NOT WIN32)
     platform/posix/win32_serial.cpp
     platform/posix/win32_strings.cpp
     platform/posix/win32_threads.cpp
-    platform/posix/win32_time.cpp)
+    platform/posix/win32_time.cpp
+    platform/posix/wide_string_functions.cpp)
   meos_apply_settings(meos_platform)
   target_link_libraries(meos_platform PUBLIC Threads::Threads)
+  # The wide string functions replace glibc's own (see the file); GCC must not turn
+  # their loops back into calls of the functions they define.
+  set_source_files_properties(platform/posix/wide_string_functions.cpp PROPERTIES
+    COMPILE_OPTIONS "-fno-builtin;-fno-tree-loop-distribute-patterns")
 
   # System libraries in place of the prebuilt ones in lib64 (docs/BUILD_LINUX.md).
   find_package(PkgConfig REQUIRED)

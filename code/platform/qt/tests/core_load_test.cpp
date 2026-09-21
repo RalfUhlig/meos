@@ -77,6 +77,38 @@ void checkCompetition(oEvent &oe) {
   CHECK(lukasz != nullptr && lukasz->getClass(false) == L"H45" && lukasz->getPlace() == 3);
 }
 
+// Fixed-length string fields of oData keep every length they can hold. They live
+// in a byte array of each object; unless that array is aligned for wchar_t, glibc's
+// vectorised wcslen and wcscmp measure wrong (a 20-character result module tag of
+// a class came back with 19 characters).
+void checkFixedStrings(oBase &object, const char *field, int maxChars) {
+  for (int length = 1; length <= maxChars; length++) {
+    std::wstring value;
+    for (int k = 0; k < length; k++)
+      value.push_back(wchar_t(L'a' + (k + length) % 26));
+    object.getDI().setString(field, value);
+    if (object.getDCI().getString(field) != value) {
+      std::fprintf(stderr, "%s: wrong value at length %d\n", field, length);
+      failures++;
+      break;
+    }
+  }
+  object.getDI().setString(field, L"");
+}
+
+void checkFixedStrings(oEvent &oe) {
+  std::vector<pClass> classes;
+  oe.getClasses(classes, false);
+  for (pClass cls : classes) {
+    checkFixedStrings(*cls, "Result", 24);
+    checkFixedStrings(*cls, "TextA", 40);
+  }
+  std::vector<pRunner> runners;
+  oe.getRunners(0, 0, runners, false);
+  for (pRunner runner : runners)
+    checkFixedStrings(*runner, "Country", 23);
+}
+
 // The texts of a generated result list, in output order.
 std::vector<std::wstring> resultListTexts(gdioutput &gdi, oEvent &oe) {
   gdi.clearPage(false);
@@ -149,6 +181,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
       CHECK(!readFile(file).empty() && readFile(extracted[0]) == readFile(file));
       removeTempFile(extracted[0]);
     }
+
+    checkFixedStrings(*gEvent);
   }
   catch (meosException &ex) {
     std::fprintf(stderr, "exception: %s\n", gdioutput::toUTF8(ex.wwhat()).c_str());
