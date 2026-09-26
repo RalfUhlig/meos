@@ -22,6 +22,7 @@
 #include <QThread>
 #include <QTranslator>
 
+#include <clocale>
 #include <map>
 #include <sstream>
 
@@ -166,6 +167,13 @@ std::unique_ptr<QApplication> meos_qt::createApplication(int &argc, char **argv)
   if (qEnvironmentVariableIsEmpty("QT_ENABLE_HIGHDPI_SCALING"))
     qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
   auto app = std::make_unique<Application>(argc, argv);
+
+  // Qt sets the C library locale from the environment (setlocale(LC_ALL, "")).
+  // The Windows CRT starts in the "C" locale and MeOS never changes it, so it
+  // reads and writes numbers with a decimal point ("4.2" km, in files as well)
+  // whatever the system language. Only the numbers go back to "C"; GTK dialogs
+  // keep the language of the system.
+  std::setlocale(LC_NUMERIC, "C");
 
   // MeOS places controls by its own measures; a desktop style with larger
   // margins would make them overlap.

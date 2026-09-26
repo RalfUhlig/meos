@@ -24,6 +24,7 @@
 #include <QTimer>
 
 #include <chrono>
+#include <clocale>
 #include <cstdio>
 #include <set>
 
@@ -854,9 +855,23 @@ void testClose() {
   QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
 }
 
+// Numbers are read and written with a decimal point, as by the Windows CRT,
+// although Qt sets the C library locale from the environment (main asks for a
+// German one, which uses a comma; without that locale installed the check is
+// trivially met).
+void testNumericLocale() {
+  CHECK(std::wcstod(L"4.2", nullptr) == 4.2);
+  CHECK(_wtof(L"0.25") == 0.25);
+  wchar_t text[16];
+  swprintf_s(text, L"%.1f", 4.2);
+  CHECK(std::wstring(text) == L"4.2");
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
+  unsetenv("LC_ALL");
+  setenv("LC_NUMERIC", "de_DE.UTF-8", 1);
   const std::unique_ptr<QApplication> app = meos_qt::createApplication(argc, argv);
 
   testClassRegistration();
@@ -873,6 +888,7 @@ int main(int argc, char **argv) {
   testPaint();
   testGeometryAndState();
   testClose();
+  testNumericLocale();
 
   if (failures) {
     std::fprintf(stderr, "%d check(s) failed\n", failures.load());
