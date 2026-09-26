@@ -69,6 +69,15 @@ void testCodePages() {
   CHECK(MultiByteToWideChar(CP_ACP, 0, cp1252, -1, nullptr, 0) == 4);
   CHECK(MultiByteToWideChar(1251, 0, "\xC6", 1, wide, 8) == 1 && wide[0] == L'\u0416');
 
+  // MB_ERR_INVALID_CHARS fails on bytes that are not UTF-8; MeOS tells UTF-8 from
+  // ANSI files this way (csvparser::parse). Without it they become U+FFFD.
+  CHECK(MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, "M\xFCller", 6, nullptr, 0) == 0);
+  CHECK(GetLastError() == ERROR_NO_UNICODE_TRANSLATION);
+  CHECK(MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, "\xC3", 1, nullptr, 0) == 0);
+  CHECK(MultiByteToWideChar(CP_UTF8, 0, "M\xFCller", 6, wide, 8) == 6 && wide[1] == L'\ufffd');
+  CHECK(MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, "M\xC3\xBCller", 7, wide, 8) == 6 &&
+        wide[1] == L'\u00fc');
+
   char narrow[8] = {0};
   BOOL usedDefault = FALSE;
   CHECK(WideCharToMultiByte(1252, 0, L"\u00e4\u0416", 2, narrow, 8, "?", &usedDefault) == 2);

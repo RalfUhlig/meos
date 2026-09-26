@@ -115,7 +115,7 @@ const std::locale &userLocale() {
 
 } // namespace
 
-int MultiByteToWideChar(UINT codePage, DWORD /*flags*/, LPCSTR src, int srcLen, LPWSTR dst, int dstLen) {
+int MultiByteToWideChar(UINT codePage, DWORD flags, LPCSTR src, int srcLen, LPWSTR dst, int dstLen) {
   if (!src || srcLen == 0 || dstLen < 0)
     return 0;
 
@@ -125,7 +125,13 @@ int MultiByteToWideChar(UINT codePage, DWORD /*flags*/, LPCSTR src, int srcLen, 
 
   std::wstring result;
   if (codePage == CP_UTF8) {
-    result = meos_compat::utf8ToWide(src, length);
+    bool invalid = false;
+    result = meos_compat::utf8ToWide(src, length, &invalid);
+    // MeOS tells UTF-8 files from ANSI files this way (csvparser::parse).
+    if (invalid && (flags & MB_ERR_INVALID_CHARS)) {
+      SetLastError(ERROR_NO_UNICODE_TRANSLATION);
+      return 0;
+    }
   }
   else {
     const SingleByteCodePage *table = isSingleByteCodePage(codePage) ? singleByteCodePage(codePage) : nullptr;

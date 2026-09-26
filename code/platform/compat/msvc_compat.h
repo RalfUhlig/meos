@@ -157,8 +157,9 @@ inline std::string wideToUtf8(const wchar_t *w) {
   return w ? wideToUtf8(w, std::wcslen(w)) : std::string();
 }
 
-// Invalid or truncated sequences decode to U+FFFD, one per offending byte.
-inline std::wstring utf8ToWide(const char *s, std::size_t len) {
+// Invalid or truncated sequences decode to U+FFFD, one per offending byte, and set
+// *invalid if given.
+inline std::wstring utf8ToWide(const char *s, std::size_t len, bool *invalid = nullptr) {
   static const std::uint32_t minValue[] = {0, 0x80, 0x800, 0x10000};
   std::wstring out;
   out.reserve(len);
@@ -172,7 +173,13 @@ inline std::wstring utf8ToWide(const char *s, std::size_t len) {
     else if ((lead & 0xE0) == 0xC0) { c = lead & 0x1F; trail = 1; }
     else if ((lead & 0xF0) == 0xE0) { c = lead & 0x0F; trail = 2; }
     else if ((lead & 0xF8) == 0xF0) { c = lead & 0x07; trail = 3; }
-    else { out += wchar_t(0xFFFD); i++; continue; }
+    else {
+      out += wchar_t(0xFFFD);
+      if (invalid)
+        *invalid = true;
+      i++;
+      continue;
+    }
 
     bool valid = i + trail < len;
     for (std::size_t k = 1; valid && k <= trail; k++) {
@@ -183,6 +190,8 @@ inline std::wstring utf8ToWide(const char *s, std::size_t len) {
     }
     if (!valid || c < minValue[trail] || c > 0x10FFFF || (c >= 0xD800 && c <= 0xDFFF)) {
       out += wchar_t(0xFFFD);
+      if (invalid)
+        *invalid = true;
       i++;
       continue;
     }

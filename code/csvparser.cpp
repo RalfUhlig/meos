@@ -1170,8 +1170,19 @@ void csvparser::parseUnicode(const wstring &file, list< vector<wstring> > &data)
     return;
   fin.seekg(2); // BOM
   assert(len % 2 == 0);
-  vector<wchar_t> bf(len / 2 + 1);
-  fin.read((char *)&bf[0], len);
+  vector<char16_t> units(len / 2);
+  fin.read((char *)units.data(), len);
+  // UTF-16 units; wchar_t is UTF-32 outside Windows, so join surrogate pairs there.
+  vector<wchar_t> bf;
+  for (size_t k = 0; k < units.size(); k++) {
+    char32_t c = units[k];
+    if (sizeof(wchar_t) > 2 && c >= 0xD800 && c < 0xDC00 && k + 1 < units.size() &&
+        units[k + 1] >= 0xDC00 && units[k + 1] < 0xE000)
+      c = 0x10000 + ((c - 0xD800) << 10) + (units[++k] - 0xDC00);
+    bf.push_back(wchar_t(c));
+  }
+  len = int(bf.size()) * 2;
+  bf.push_back(0);
   vector<wstring> rows;
   int spp = 0;
   for (int k = 0; k < len / 2; k++) {
@@ -1227,6 +1238,9 @@ void csvparser::parse(const wstring &file, list<vector<wstring>> &data) {
   wchar_t *wbf = &wbf_a[0];
   wstring w;
   while(std::getline(fin, rbf)) {
+    // Text mode drops the '\r' of "\r\n" only on Windows.
+    if (!rbf.empty() && rbf.back() == '\r')
+      rbf.pop_back();
     const char *bf = rbf.c_str();
     if (detectType) {
       detectType = false;

@@ -19,9 +19,11 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
+#include <list>
 #include <set>
 
 #include "app_frame.h"
+#include "csvparser.h"
 #include "demo_competition.h"
 #include "gdioutput.h"
 #include "meos_util.h"
@@ -109,6 +111,59 @@ void checkFixedStrings(oEvent &oe) {
     checkFixedStrings(*runner, "Country", 23);
 }
 
+// A CSV file reads the same in each encoding csvparser::parse accepts. MeOS reads
+// UTF-16 files (Excel's "Unicode text", byte order mark FF FE) two bytes per
+// character, which is a wchar_t only on Windows.
+std::string utf16le(const std::wstring &text) {
+  std::string out("\xFF\xFE", 2);
+  auto unit = [&out](unsigned u) {
+    out.push_back(char(u & 0xFF));
+    out.push_back(char(u >> 8));
+  };
+  for (wchar_t c : text) {
+    unsigned code = unsigned(c);
+    if (code > 0xFFFF) {
+      code -= 0x10000;
+      unit(0xD800 + (code >> 10));
+      unit(0xDC00 + (code & 0x3FF));
+    }
+    else
+      unit(code);
+  }
+  return out;
+}
+
+void checkCsvEncoding(const std::string &bytes, const std::list<std::vector<std::wstring>> &expected) {
+  const std::wstring file = getTempFile() + L".csv";
+  {
+    std::ofstream out(meosPath(file), std::ios::binary);
+    out << bytes;
+  }
+  csvparser csv;
+  std::list<std::vector<std::wstring>> rows;
+  csv.parse(file, rows);
+  removeTempFile(file);
+  CHECK(rows == expected);
+  if (rows != expected) {
+    for (const auto &row : rows)
+      for (const std::wstring &cell : row)
+        std::fprintf(stderr, "  cell: %s\n", gdioutput::toUTF8(cell).c_str());
+  }
+}
+
+void checkCsvEncodings() {
+  const std::list<std::vector<std::wstring>> latin = {{L"Müller", L"Jürgen", L"500101"},
+                                                       {L"Weiß", L"Zoë", L"ESV Köln"}};
+  std::list<std::vector<std::wstring>> all = latin;
+  all.push_back({L"Żółw", L"Łukasz", L"Ωμέγα \U0001F600"});
+  const std::wstring allText = L"Müller;Jürgen;500101\r\nWeiß;Zoë;ESV Köln\r\nŻółw;Łukasz;Ωμέγα \U0001F600\r\n";
+
+  checkCsvEncoding("\xEF\xBB\xBF" + gdioutput::toUTF8(allText), all);
+  checkCsvEncoding(gdioutput::toUTF8(allText), all);
+  checkCsvEncoding("M\xFCller;J\xFCrgen;500101\r\nWei\xDF;Zo\xEB;ESV K\xF6ln\r\n", latin);
+  checkCsvEncoding(utf16le(allText), all);
+}
+
 // The texts of a generated result list, in output order.
 std::vector<std::wstring> resultListTexts(gdioutput &gdi, oEvent &oe) {
   gdi.clearPage(false);
@@ -183,6 +238,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
     }
 
     checkFixedStrings(*gEvent);
+    checkCsvEncodings();
   }
   catch (meosException &ex) {
     std::fprintf(stderr, "exception: %s\n", gdioutput::toUTF8(ex.wwhat()).c_str());

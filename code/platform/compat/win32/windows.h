@@ -293,6 +293,7 @@ int GetTimeFormatA(LCID locale, DWORD flags, const SYSTEMTIME *time, LPCSTR form
 #define ERROR_DIR_NOT_EMPTY       145
 #define ERROR_ALREADY_EXISTS      183
 #define ERROR_DIRECTORY           267
+#define ERROR_NO_UNICODE_TRANSLATION 1113
 #define ERROR_CANCELLED           1223
 
 #define GENERIC_READ  0x80000000UL
