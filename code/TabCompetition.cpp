@@ -1721,7 +1721,7 @@ int TabCompetition::competitionCB(gdioutput &gdi, GuiEventType type, BaseInfo *d
       bf[1]='\n';
       entryText.clear();
       while (fin.good() && !fin.eof()) {
-        fin.getline(bf+2, 1024-2);
+        meosGetline(fin, bf+2, 1024-2);
         entryText += gdi.recodeToWide(bf);
       }
       entryText+=L"\r\n";

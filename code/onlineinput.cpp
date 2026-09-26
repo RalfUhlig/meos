@@ -845,9 +845,9 @@ void OnlineInput::processPunchesSICenter(oEvent &oe, const wstring& filename) {
 	wstring line;
 
 	// Skip the header
-	std::getline(file, line);
+	meosGetline(file, line);
 
-	while (std::getline(file, line)) {
+	while (meosGetline(file, line)) {
 		wstringstream ss(line);
 		wstring field, type, cardstr;
 

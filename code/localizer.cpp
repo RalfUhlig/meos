@@ -500,7 +500,7 @@ void LocalizerImpl::loadTable(const wstring &file, const wstring &language)
   raw.reserve(line);
   while (!fin.eof()) {
     bf[0] = 0;
-    fin.getline(bf, 8*1024);
+    meosGetline(fin, bf, 8*1024);
     if (bf[0]!=0 && bf[0]!='#')
       raw.push_back(bf);
   }

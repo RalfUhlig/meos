@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sstream>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -56,6 +57,27 @@ void testUtf8() {
   CHECK(meos_compat::utf8ToWide(utf8.c_str()) == text);
   CHECK(meos_compat::utf8ToWide("a\xFF" "b") == L"a\uFFFDb");
   CHECK(meos_compat::utf8ToWide("\xE2\x82") == L"\uFFFD\uFFFD");
+}
+
+// meosGetline reads a Windows file (CRLF) as Windows' text mode does, and a
+// Unix file unchanged.
+void testTextLines() {
+  std::istringstream in("eins\r\nzwei\n\r\nletzte\r");
+  std::string line;
+  std::vector<std::string> lines;
+  while (meosGetline(in, line))
+    lines.push_back(line);
+  CHECK((lines == std::vector<std::string>{"eins", "zwei", "", "letzte"}));
+
+  std::wistringstream win(L"Start\r\nFinish");
+  std::wstring wline;
+  CHECK(meosGetline(win, wline) && wline == L"Start");
+  CHECK(meosGetline(win, wline) && wline == L"Finish");
+
+  std::istringstream bin("@MEOS EXPORT TEMPLATE\r\nx\n");
+  char buffer[64];
+  CHECK(meosGetline(bin, buffer, sizeof(buffer)) && std::string(buffer) == "@MEOS EXPORT TEMPLATE");
+  CHECK(meosGetline(bin, buffer, sizeof(buffer)) && std::string(buffer) == "x");
 }
 
 void testCodePages() {
@@ -699,6 +721,7 @@ void testInternet() {
 
 int main() {
   testWideFormat();
+  testTextLines();
   testUtf8();
   testCodePages();
   testTime();

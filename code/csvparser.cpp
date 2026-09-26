@@ -78,7 +78,7 @@ csvparser::CSV csvparser::iscsv(const wstring &file) {
   char bf[2048];
   bool isCSVType = false;
   while (fin.good() && !isCSVType) {
-    fin.getline(bf, 2048);
+    meosGetline(fin, bf, 2048);
     isCSVType = strlen(bf) >= 3;
   }
   bf[2047] = 0;
@@ -1237,10 +1237,7 @@ void csvparser::parse(const wstring &file, list<vector<wstring>> &data) {
   wbf_a.resize(size_t(flen)+1);
   wchar_t *wbf = &wbf_a[0];
   wstring w;
-  while(std::getline(fin, rbf)) {
-    // Text mode drops the '\r' of "\r\n" only on Windows.
-    if (!rbf.empty() && rbf.back() == '\r')
-      rbf.pop_back();
+  while(meosGetline(fin, rbf)) {
     const char *bf = rbf.c_str();
     if (detectType) {
       detectType = false;

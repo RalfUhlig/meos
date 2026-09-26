@@ -788,7 +788,7 @@ void HTMLWriter::enumTemplates(TemplateType type, vector<TemplateInfo> &descript
   set<string> tags;
   auto fillInUsedFunctions = [](ifstream &file, TemplateInfo& ti) {
     string str;
-    while (getline(file, str)) {
+    while (meosGetline(file, str)) {
       bool isComment = false;
       int ix = 0;
       while (ix < str.size()) {
@@ -812,13 +812,13 @@ void HTMLWriter::enumTemplates(TemplateType type, vector<TemplateInfo> &descript
     bool userDefined = --userCounter >= 0;
     ifstream file(meosPath(fn));
     string str;
-    if (getline(file, str)) {
-      if (str == "@MEOS EXPORT TEMPLATE" && getline(file, str)) {
+    if (meosGetline(file, str)) {
+      if (str == "@MEOS EXPORT TEMPLATE" && meosGetline(file, str)) {
         parseTagName(str, ti.tag, ti.name);
         if (!tags.insert(ti.tag).second)
           continue; // Already included
 
-        if (getline(file, str)) 
+        if (meosGetline(file, str)) 
           string2Wide(str, ti.desc);
 
         ti.file = fn;
@@ -828,12 +828,12 @@ void HTMLWriter::enumTemplates(TemplateType type, vector<TemplateInfo> &descript
           descriptionFile.push_back(ti);
         }
       }
-      else if (str == "@MEOS PAGE" && getline(file, str)) {
+      else if (str == "@MEOS PAGE" && meosGetline(file, str)) {
         parseTagName(str, ti.tag, ti.name);
         if (!tags.insert(ti.tag).second)
           continue; // Already included
 
-        if (getline(file, str)) {
+        if (meosGetline(file, str)) {
           string2Wide(str, ti.desc);
         }
         ti.file = fn;
@@ -944,7 +944,7 @@ void HTMLWriter::read(const wstring &fileName) {
   vector<int> ifBlock;
 
   const string comment = "//";
-  while (getline(file, str)) {
+  while (meosGetline(file, str)) {
     bool skipLine = count(ifBlock.begin(), ifBlock.end(), 0) > 0;
     string trimLine = trim(str);
     if (ok == 0 && str == "@MEOS EXPORT TEMPLATE") {
@@ -954,7 +954,7 @@ void HTMLWriter::read(const wstring &fileName) {
     else if (ok == 1) {
       ok = 2;
       parseTagName(str, tag, name);
-      if (getline(file, str)) {
+      if (meosGetline(file, str)) {
         info = str;
       }
       skipLine = true;

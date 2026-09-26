@@ -26,6 +26,7 @@
 #include "csvparser.h"
 #include "demo_competition.h"
 #include "gdioutput.h"
+#include "HTMLWriter.h"
 #include "meos_util.h"
 #include "meosexception.h"
 #include "oEvent.h"
@@ -164,6 +165,32 @@ void checkCsvEncodings() {
   checkCsvEncoding(utf16le(allText), all);
 }
 
+// HTML templates come from the Windows installer with CRLF line ends. MeOS
+// recognizes a template by its first line, so a '\r' left there hid all of them.
+void checkTemplateWithWindowsLineEnds() {
+  wchar_t path[MAX_PATH];
+  getUserFile(path, L"crlftest.meostmpl");
+  {
+    std::ofstream out(meosPath(path), std::ios::binary);
+    out << "@MEOS EXPORT TEMPLATE\r\ncrlftest@CRLF test\r\nOne page\r\n"
+           "@HEAD\r\n<meta charset=\"utf-8\">\r\n@OUTERPAGE\r\n<div>@P</div>\r\n@END\r\n";
+  }
+  std::vector<HTMLWriter::TemplateInfo> templates;
+  HTMLWriter::enumTemplates(HTMLWriter::TemplateType::List, templates);
+  bool found = false;
+  for (const HTMLWriter::TemplateInfo &ti : templates) {
+    if (ti.tag == "crlftest") {
+      found = true;
+      CHECK(ti.name == L"CRLF test" && ti.desc == L"One page");
+    }
+  }
+  CHECK(found);
+  HTMLWriter writer;
+  writer.read(path);
+  CHECK(writer.tag == "crlftest" && writer.name == L"CRLF test");
+  DeleteFile(path);
+}
+
 // The texts of a generated result list, in output order.
 std::vector<std::wstring> resultListTexts(gdioutput &gdi, oEvent &oe) {
   gdi.clearPage(false);
@@ -239,6 +266,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
 
     checkFixedStrings(*gEvent);
     checkCsvEncodings();
+    checkTemplateWithWindowsLineEnds();
   }
   catch (meosException &ex) {
     std::fprintf(stderr, "exception: %s\n", gdioutput::toUTF8(ex.wwhat()).c_str());
