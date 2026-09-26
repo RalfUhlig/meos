@@ -55,8 +55,8 @@ protected:
   static const int dataSize = 128 * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
 
-  BYTE oData[dataSize];
-  BYTE oDataOld[dataSize];
+  alignas(8) BYTE oData[dataSize];
+  alignas(8) BYTE oDataOld[dataSize];
 
   // Length of each leg, Start-1, 1-2,... N-Finish.
   vector<int> legLengths;

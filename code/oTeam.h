@@ -59,8 +59,8 @@ protected:
 
   static const int dataSize = 256 * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
-  BYTE oData[dataSize];
-  BYTE oDataOld[dataSize];
+  alignas(8) BYTE oData[dataSize];
+  alignas(8) BYTE oDataOld[dataSize];
 
   // Remove runner r by force and mark as need correction
   void correctRemove(pRunner r);

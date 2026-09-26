@@ -403,8 +403,8 @@ protected:
 
   static const int dataSize = 1024 * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
-  BYTE oData[dataSize];
-  BYTE oDataOld[dataSize];
+  alignas(8) BYTE oData[dataSize];
+  alignas(8) BYTE oDataOld[dataSize];
   vector<vector<wstring>> dynamicData;
 
   /** Get internal data buffers for DI */

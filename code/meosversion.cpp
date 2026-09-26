@@ -45,11 +45,7 @@ wstring getMajorVersion() {
 wstring getMeosFullVersion() {
   wchar_t bf[256];
 
-#ifdef _WIN64
-  const wchar_t *bits = L"64-bit";
-#else
-  const wchar_t *bits = L"32-bit";
-#endif
+  const wchar_t *bits = sizeof(void *) == 8 ? L"64-bit" : L"32-bit";
 
   wstring maj = getMajorVersion();
   if (getBuildType().empty())

@@ -660,8 +660,8 @@ protected:
   static constexpr int dataSize = (256+64) * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
 
-  BYTE oData[dataSize];
-  BYTE oDataOld[dataSize];
+  alignas(8) BYTE oData[dataSize];
+  alignas(8) BYTE oDataOld[dataSize];
 
   void changedObject() final;
 

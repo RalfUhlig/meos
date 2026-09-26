@@ -83,8 +83,8 @@ protected:
 
   static const int dataSize = 64 * sizeof(wchar_t) / 2;
   int getDISize() const final {return dataSize;}
-  BYTE oData[dataSize];
-  BYTE oDataOld[dataSize];
+  alignas(8) BYTE oData[dataSize];
+  alignas(8) BYTE oDataOld[dataSize];
 
   /// Table methods
   void addTableRow(Table &table) const;
