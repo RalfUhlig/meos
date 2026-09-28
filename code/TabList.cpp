@@ -2232,7 +2232,7 @@ void TabList::handleHTMLSettings(gdioutput &gdi, BaseInfo &info, GuiEventType ty
       oListParam &param = currentList.getParam();
       param.htmlTypeTag = typeTag;
 
-      if (margin > 0) {
+      if (margin >= 0) {
         param.htmlRows = rows;
         param.htmlScale = scale;
         param.timePerPage = time_ms;
@@ -2247,7 +2247,7 @@ void TabList::handleHTMLSettings(gdioutput &gdi, BaseInfo &info, GuiEventType ty
       if (bi.id == "ApplyList") {
         if (param.sourceParam != -1) {
           auto &dest = oe->getListContainer().getParam(param.sourceParam);
-          if (margin > 0) {
+          if (margin >= 0) {
             dest.htmlRows = rows;
             dest.htmlScale = scale;
             dest.timePerPage = time_ms;
