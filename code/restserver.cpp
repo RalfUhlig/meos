@@ -220,6 +220,44 @@ void RestServer::compute(oEvent &ref) {
 
 extern wchar_t programPath[MAX_PATH];
 
+vector<pair<int, wstring>> RestServer::updateListCache(oEvent &ref) {
+  vector<pair<int, wstring>> keys;
+  vector<oListParam> lists;
+  TabList::getPublicLists(ref, lists);
+  map<EStdListType, oListInfo> listMap;
+  ref.getListTypes(listMap, false);
+  for (auto &lp : lists) {
+    wstring n = lp.getName();
+    if (n.empty()) {
+      n = listMap[lp.listCode].getName();
+    }
+    lp.setName(n);
+
+    int keyCand = lp.listCode * 100;
+    bool done = false;
+    for (int i = 0; i < 100; i++) {
+      if (!listCache.count(keyCand + i)) {
+        keyCand += i;
+        listCache[keyCand].first = lp;
+        done = true;
+        break;
+      }
+      else if(listCache[keyCand + i].first == lp) {
+        keyCand = keyCand + i;
+        done = true;
+        break;
+      }
+    }
+    if (!done) {
+      listCache[keyCand].first = lp;
+      listCache[keyCand].second.reset();
+    }
+
+    keys.emplace_back(keyCand, n);
+  }
+  return keys;
+}
+
 void RestServer::computeInternal(oEvent &ref, shared_ptr<RestServer::EventRequest> &rq) {
   if (rq->parameters.empty()) {
     rq->answer = "<!DOCTYPE html><html><head>"
@@ -232,38 +270,8 @@ void RestServer::computeInternal(oEvent &ref, shared_ptr<RestServer::EventReques
       "<ul>\n";
 
     rq->answer += "<h2>" + ref.gdiBase().toUTF8(lang.tl("Listor")) + "</h2>";
-    vector<oListParam> lists;
-    TabList::getPublicLists(ref, lists);
-    map<EStdListType, oListInfo> listMap;
-    ref.getListTypes(listMap, false);
-    for (auto &lp : lists) {
-      wstring n = lp.getName();
-      if (n.empty()) {
-        n = listMap[lp.listCode].getName();
-      }
-      lp.setName(n);
-      
-      int keyCand = lp.listCode * 100;
-      bool done = false;
-      for (int i = 0; i < 100; i++) {
-        if (!listCache.count(keyCand + i)) {
-          keyCand += i;
-          listCache[keyCand].first = lp;
-          done = true;
-          break;
-        }
-        else if(listCache[keyCand + i].first == lp) {
-          keyCand = keyCand + i;
-          done = true;
-          break;
-        }
-      }
-      if (!done) {
-        listCache[keyCand].first = lp;
-        listCache[keyCand].second.reset();
-      }
-
-      rq->answer += "<li><a href=\"?html=1&type=" + itos(keyCand) + "\">" + ref.gdiBase().toUTF8(n) + "</a></li>\n";
+    for (auto &[key, name] : updateListCache(ref)) {
+      rq->answer += "<li><a href=\"?html=1&type=" + itos(key) + "\">" + ref.gdiBase().toUTF8(name) + "</a></li>\n";
     }
     //  "<li><a href=\"?html=1&result=1\">Resultat</a></li>"
     //  "<li><a href=\"?html=1&startlist=1\">Startlista</a></li>"
@@ -451,7 +459,12 @@ void RestServer::computeInternal(oEvent &ref, shared_ptr<RestServer::EventReques
     string stype = rq->parameters.count("type") ? rq->parameters.find("type")->second : _EmptyString;
     int type = atoi(stype.c_str());
     auto res = listCache.find(type);
-      
+    if (res == listCache.end()) {
+      // The link may be older than this server, whose cache only the list overview fills.
+      updateListCache(ref);
+      res = listCache.find(type);
+    }
+
     if (res != listCache.end()) {
       gdioutput gdiPrint("print", ref.gdiBase().getScale());
       gdiPrint.clearPage(false);
