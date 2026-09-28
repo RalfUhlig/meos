@@ -100,6 +100,8 @@ private:
   void computeInternal(oEvent &ref, shared_ptr<RestServer::EventRequest> &rq);
 
   map<int, pair<oListParam, shared_ptr<oListInfo> > > listCache;
+  // Give each public list its key in listCache. Returns the keys with the list names.
+  vector<pair<int, wstring>> updateListCache(oEvent &ref);
 
   string root;
   multimap<string, string> rootMap;
