@@ -369,13 +369,22 @@ void oListParam::deserialize(const xmlobject &xml, const MetaListContainer &cont
   screenMode = xml.getObjectInt("ScreenMode");
   animate = xml.getObjectBool("Animate");
 
+  // A competition file leaves out values that are 0. Inside a block that
+  // serialize wrote, a missing value is therefore 0, not the default.
+  bool hasHTML = xml.got("HTML");
+  bool hasPageBlock = hasHTML || xml.got("NumColumns");
+
   if (xml.got("TimePerPage"))
     timePerPage = xml.getObjectInt("TimePerPage");
+  else if (hasPageBlock)
+    timePerPage = 0;
 
   if (xml.got("Margin"))
     margin = xml.getObjectInt("Margin");
+  else if (hasPageBlock)
+    margin = 0;
 
-  if (xml.got("HTML"))
+  if (hasHTML)
     xml.getObjectString("HTML", htmlTypeTag);
 
   if (xml.got("Scale")) {
@@ -388,6 +397,9 @@ void oListParam::deserialize(const xmlobject &xml, const MetaListContainer &cont
 
   if (xml.got("PageRows")) {
     htmlRows = xml.getObjectInt("PageRows");
+  }
+  else if (hasHTML) {
+    htmlRows = 0;
   }
 
   saved = true;
