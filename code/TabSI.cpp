@@ -3638,6 +3638,16 @@ wstring TabSI::getPlace(const oRunner* runner) {
       return placeS;
     }
   }
+  const pClass cls = runner->getClassRef(true);
+  if (runner->getEvent()->mergeCourseFamilies() && !runner->getTeam() && runner->getRaceNo() == 0 &&
+      runner->getCourse(false) && cls && cls->getResultModuleTag().empty()) {
+    // Course based results: report the place the competitor will hold in the course
+    // result list. Team legs, extra races and classes with a result module keep the
+    // class place -- the group id of ClassCourseResult models none of them.
+    int p = runner->getCoursePlace(true);
+    return (p > 0 && p < 10000) ? itow(p) : _EmptyWString;
+  }
+
   wstring placeS = (runner->getTeam() && !qfClass) ?
     runner->getTeam()->getLegPlaceS(runner->getLegNumber(), false) :
     runner->getPlaceS();

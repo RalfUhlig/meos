@@ -324,6 +324,25 @@ void oListInfo::transformTypes(oEvent& oe) const {
 
   for (auto& pp : subListPost)
     pp.type = transformType(oe, pp.type);
+
+  // A group header must name the group the runners are ranked within. For a course
+  // sort order that is the course family when variants are merged, and the course
+  // itself when they are not -- which is what lRunnerCourseFamily renders, so no
+  // check of the feature is needed here. Headers only: a row keeps naming the
+  // variant the competitor actually ran. Not guarded by transformStatus, so that
+  // the list editor preview shows the same header as the printed list. Left out on
+  // purpose: lCourseName, because an EBaseTypeCourse list sorts its courses by name
+  // and ignores sortOrder, so its rows stay per variant.
+  if (listType != EBaseTypeCourse &&
+      (sortOrder == SortOrder::CourseResult || sortOrder == SortOrder::ClassCourseResult ||
+       sortOrder == SortOrder::CourseStartTime)) {
+    for (auto blp : { &head, &subHead }) {
+      for (auto& pp : *blp) {
+        if (pp.type == lRunnerCourse)
+          pp.type = lRunnerCourseFamily;
+      }
+    }
+  }
 }
 
 int oListInfo::getMaxCharWidth(oEvent &oe,

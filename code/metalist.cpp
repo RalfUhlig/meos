@@ -2102,6 +2102,12 @@ void MetaListPost::deserialize(const xmlobject &xml) {
   }
 
   type = MetaList::symbolToType[tp];
+  if (type == lRunnerCourseFamily) {
+    // Internal type: oListInfo::transformTypes applies it per sort order when
+    // rendering. Mapping it back on load keeps stored definitions readable by
+    // a MeOS build that does not know the symbol.
+    type = lRunnerCourse;
+  }
   xml.getObjectString("Text", text);
   xml.getObjectString("ResultModule", resultModule);
   if (xml.getObject("Leg"))
@@ -2120,7 +2126,11 @@ void MetaListPost::deserialize(const xmlobject &xml) {
       alignType = lString;
       alignWithText = at;
     }
-    else alignType = MetaList::symbolToType[at];
+    else {
+      alignType = MetaList::symbolToType[at];
+      if (alignType == lRunnerCourseFamily)
+        alignType = lRunnerCourse; // Follows the post type mapped above.
+    }
   }
 
   packPrevious = xml.getObjectBool("PackPrevious");

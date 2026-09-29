@@ -20,9 +20,12 @@ Personal additions, not proposed upstream.
   the additional race. A rental card handed out twice becomes visible before anything is
   written, and "Another competitor" leads back to selecting one by name. With the option off,
   nothing of this happens.
-- **Merge course variants** — a new MeOS feature switch (Teams and forking): courses forked from
+- **Course based results** — a new MeOS feature switch (Teams and forking): courses forked from
   one IOF XML 3.0 course family are ranked as a single course in course result lists, including
-  the time behind. Course identity is untouched, so a swapped fork is still a mispunch.
+  the time behind, and the card readout reports the place within class and course instead of the
+  class place. Course identity is untouched, so a swapped fork is still a mispunch. Lists need no
+  extra element: with a course sort order the group header follows the ranking on its own. The
+  switch is left out of "all features" so that it stays a deliberate choice.
 - **Duplicate** on the runner tab prepares a second entry for a competitor by hand, for a repeat
   start announced at the entry desk; the readout then picks it up without asking.
 

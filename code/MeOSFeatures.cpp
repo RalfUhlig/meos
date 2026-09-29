@@ -48,7 +48,7 @@ MeOSFeatures::MeOSFeatures(void)
   add(RunnerDb, L"RD", "Club and runner database").require(Clubs);
   addHead("Teams and forking");
   add(ForkedIndividual, L"FO", "Forked individual courses");
-  add(MergeCourseVariants, L"MV", "Merge course variants").require(ForkedIndividual);
+  add(MergeCourseVariants, L"MV", "Course based results");
   add(Patrol, L"PT", "Patrols");
   add(Relay, L"RL", "Relays");
   add(MultipleRaces, L"MR", "Several races for a runner").require(Relay);
@@ -243,7 +243,8 @@ void MeOSFeatures::loadDefaults(oEvent &oe) {
 
 void MeOSFeatures::useAll(oEvent &oe) {
   for (size_t k = 0; k < desc.size(); k++) {
-    if (desc[k].feat == NoCourses)
+    // Course based results is a ruling, not a capability: it must stay a deliberate choice.
+    if (desc[k].feat == NoCourses || desc[k].feat == MergeCourseVariants)
       continue;
     if (desc[k].feat != _Head)
       features.insert(desc[k].feat);
