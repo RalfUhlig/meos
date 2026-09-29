@@ -33,8 +33,9 @@ directory under `refs/heads`.
 Branches given up without being merged are kept as annotated `archive/*` tags, so their commits
 stay reachable. A branch that was merged into `local` beforehand needs no tag and is simply
 deleted — on 2026-09-20 that was `feature/course-family-results`, `feature/additional-race` and
-`feature/duplicate-runner`. To get such a branch back, create it from the second parent of its
-merge commit, e.g. `git branch feature/additional-race bba4d97^2`.
+`feature/duplicate-runner`, on 2026-09-29 `feature/course-family-coupling`. To get such a branch
+back, create it from the second parent of its merge commit, e.g.
+`git branch feature/additional-race bba4d97^2`.
 
 On 2026-09-15 `local` was rebuilt from `master`. Features used to branch off `master` for
 possible upstream PRs while also building on each other in `local`, and the same conflicts had
