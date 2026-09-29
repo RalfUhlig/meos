@@ -29,8 +29,9 @@ Personal additions, not proposed upstream.
 - **Duplicate** on the runner tab prepares a second entry for a competitor by hand, for a repeat
   start announced at the entry desk; the readout then picks it up without asking.
 
-Smaller: the card readout line shows the course when it differs from the class name, and the
-German translation of the affected strings was completed.
+Smaller: the card readout line shows the course when it differs from the class name, a card
+stored unpaired names the competitor its number belongs to, and the German translation of the
+affected strings was completed.
 
 ### Fixes
 
@@ -45,3 +46,9 @@ Fixes of upstream behaviour, kept on `bugfix/*` branches.
   then no longer resolves.
 - The class course entry on the runner tab is labelled after the class, not after the course the
   competitor happens to have of their own.
+- A list switched to no row limit, a margin of 0 % or a display time of 0 keeps these settings:
+  the HTML export dropped the row limit, columns and margin whenever the margin was 0, and a
+  reopened competition read every zero back as the default — 60 rows per page, 5 %, 8 seconds.
+- A list link of the Information Server (`?html=1&type=…`) keeps working after a restart of
+  MeOS or the service; it used to answer "Unknown list" until the list overview had been
+  opened once.
