@@ -644,16 +644,16 @@ protected:
   mutable bool tNeedNoCard;
   mutable bool tUseStartPunch;
   mutable int tDuplicateLeg;
-  mutable int tNumShortening;
-  mutable int tShortenDataRevision;
+  mutable int tNumShortening = 0;
+  mutable int tShortenDataRevision = -1;
 
   //Temporary status and running time
-  RunnerStatus tempStatus;
-  int tempRT;
+  RunnerStatus tempStatus = StatusUnknown;
+  int tempRT = 0;
 
   bool isTemporaryObject;
-  int tTimeAfter; // Used in time line calculations, time after "last radio".
-  int tInitialTimeAfter; // Used in time line calculations, time after when started.
+  int tTimeAfter = 0; // Used in time line calculations, time after "last radio".
+  int tInitialTimeAfter = 0; // Used in time line calculations, time after when started.
   //Speaker data
   int speakerPriority = 0;
 
