@@ -1,0 +1,11 @@
+# UBSan findings of MeOS that the tests accept (UBSAN_OPTIONS=suppressions=..., set by CTest
+# for the tests that run MeOS code, together with halt_on_error=1).
+#
+# Checksums that multiply signed integers and let them overflow (findings 11 and 17 of
+# stage 1.3.4, upstream list in plans/linux-port.md). The overflow is undefined; GCC and
+# MSVC wrap around in practice, and the value only serves as a key. Not changed in the
+# port. Every other finding fails the test.
+signed-integer-overflow:checksum
+signed-integer-overflow:MetaList::initUniqueIndex
+signed-integer-overflow:DynamicResult::getHashCode
+signed-integer-overflow:RenderedPage::calculateCS

@@ -277,13 +277,19 @@ if(NOT WIN32)
   meos_apply_settings(meos_gui_workbench)
   meos_link_meos(meos_gui_workbench)
 
+  # UBSan only reports by default. The tests that run MeOS code stop at the first finding
+  # instead, except for the accepted ones in the suppression list (stage 1.3.5). Without
+  # the sanitizers (Release) the variable has no effect.
+  set(MEOS_TEST_UBSAN_OPTIONS
+    "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1:suppressions=${CMAKE_CURRENT_SOURCE_DIR}/platform/qt/tests/ubsan_suppressions.txt")
+
   # Builds every page and writes its screenshot and layout (stage 1.2.7). The only
   # test that runs real gdioutput pages; the files are meant for the comparison with
   # a Windows run (docs/BUILD_LINUX.md).
   add_test(NAME workbench_shot
            COMMAND meos_gui_workbench -shot "${CMAKE_CURRENT_BINARY_DIR}/workbench_shot/linux")
   set_tests_properties(workbench_shot PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/workbench_shot_data"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/workbench_shot_data;${MEOS_TEST_UBSAN_OPTIONS}"
     TIMEOUT 300)
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/workbench_shot")
 
@@ -295,7 +301,7 @@ if(NOT WIN32)
   meos_link_meos(meos_core_load_test)
   add_test(NAME core_load_test COMMAND meos_core_load_test)
   set_tests_properties(core_load_test PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/core_load_test_data"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/core_load_test_data;${MEOS_TEST_UBSAN_OPTIONS}"
     TIMEOUT 300)
 
   # The tests of registerTests() (tests.cpp, stage 1.3.5) in the frame of MeOS without
@@ -306,7 +312,7 @@ if(NOT WIN32)
   meos_link_meos(meos_gui_tests)
   add_test(NAME gui_tests COMMAND meos_gui_tests)
   set_tests_properties(gui_tests PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/gui_tests_data"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/gui_tests_data;${MEOS_TEST_UBSAN_OPTIONS}"
     TIMEOUT 300)
 
   # The MySQL headers in code/mysql (used by mysqlwrapper.cpp) match those of the linked
