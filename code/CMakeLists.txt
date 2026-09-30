@@ -298,6 +298,17 @@ if(NOT WIN32)
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/core_load_test_data"
     TIMEOUT 300)
 
+  # The tests of registerTests() (tests.cpp, stage 1.3.5) in the frame of MeOS without
+  # meos.cpp (decision E11). They drive the real tabs through TestMeOS.
+  add_executable(meos_gui_tests platform/qt/tests/gui_tests.cpp)
+  meos_apply_settings(meos_gui_tests)
+  target_include_directories(meos_gui_tests PRIVATE platform/qt/workbench)
+  meos_link_meos(meos_gui_tests)
+  add_test(NAME gui_tests COMMAND meos_gui_tests)
+  set_tests_properties(gui_tests PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/gui_tests_data"
+    TIMEOUT 300)
+
   # The MySQL headers in code/mysql (used by mysqlwrapper.cpp) match those of the linked
   # client library. mysql_api_vendored.cpp finds "mysql/mysql.h" in code/, the system
   # header comes from the include directories of the pkg-config module.

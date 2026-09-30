@@ -392,6 +392,12 @@ gdioutput *createExtraWindow(const string &tag, const wstring &title, int max_x,
   gdioutput *gdi = new gdioutput(tag, 1.0);
   gdi->setFont(gEvent->getPropertyInt("TextSize", 0), gEvent->getPropertyString("UIFont", L"Segoe UI"));
   gdi->init(hWnd, hWnd, 0);
+  // As meos.cpp: a window opened by a test answers its dialogs from the test.
+  gdi->isTestMode = gdi_main->isTestMode;
+  if (gdi->isTestMode && !gdi_main->cmdAnswers.empty()) {
+    gdi->dbPushDialogAnswer(gdi_main->cmdAnswers.front());
+    gdi_main->cmdAnswers.pop_front();
+  }
   SetWindowLongPtr(hWnd, GWLP_USERDATA, gdi_extra.size());
   currentFocusIx = gdi_extra.size();
   gdi_extra.push_back(gdi);
