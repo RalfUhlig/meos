@@ -49,6 +49,9 @@ struct Timer {
   UINT_PTR id;
   TIMERPROC proc;
   int qtTimer;
+  // Fired while GetMessage waited at the current depth; GetMessage returns it as
+  // WM_TIMER. As on Windows, a timer has at most one WM_TIMER in the queue.
+  bool pending = false;
 };
 std::vector<Timer> timers;
 
@@ -121,8 +124,15 @@ void TimerHost::timerEvent(QTimerEvent *event) {
     }
   }
 
-  // Windows delivers WM_TIMER through the message loop; here the procedure is
-  // called directly, which also works inside modal loops.
+  // Windows delivers WM_TIMER through the message loop. If GetMessage waits at this
+  // depth, it returns the timer (code that waits with GetMessage, such as
+  // mainMessageLoop(0, time) in MeOS, relies on that). Elsewhere, for example in the
+  // Qt loop of a native dialog, the procedure is called directly, as the modal loop
+  // of Windows would dispatch it.
+  if (!waitingDepths.empty() && waitingDepths.back() == currentHandlerDepth) {
+    timer->pending = true;
+    return;
+  }
   if (fired.proc) {
     meos_qt::HandlerScope scope;
     fired.proc(fired.window, WM_TIMER, fired.id, GetTickCount());
@@ -176,6 +186,19 @@ bool meos_qt::takePostedMessage(MSG &msg, HWND filter, UINT filterMin, UINT filt
       continue;
     msg = *it;
     postedMessages.erase(it);
+    return true;
+  }
+  return false;
+}
+
+bool meos_qt::takeTimerMessage(MSG &msg, HWND filter, UINT filterMin, UINT filterMax) {
+  if ((filterMin || filterMax) && (WM_TIMER < filterMin || WM_TIMER > filterMax))
+    return false;
+  for (Timer &timer : timers) {
+    if (!timer.pending || (filter && timer.window != filter))
+      continue;
+    timer.pending = false;
+    msg = MSG{timer.window, WM_TIMER, timer.id, reinterpret_cast<LPARAM>(timer.proc), GetTickCount(), {0, 0}, 0};
     return true;
   }
   return false;

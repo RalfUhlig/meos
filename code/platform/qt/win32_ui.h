@@ -251,6 +251,9 @@ public:
 // Posted messages. takePostedMessage removes the first message that matches.
 void postToQueue(const MSG &msg);
 bool takePostedMessage(MSG &msg, HWND filter, UINT filterMin, UINT filterMax);
+// Takes a timer that fired while GetMessage waited, as a WM_TIMER message whose
+// lParam is the TIMERPROC (DispatchMessage calls it) or 0.
+bool takeTimerMessage(MSG &msg, HWND filter, UINT filterMin, UINT filterMax);
 // Called in the GUI thread for every posted message: dispatches queued messages
 // unless GetMessage waits for them at the current handler depth.
 void deliverPostedMessages();

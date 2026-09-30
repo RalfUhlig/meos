@@ -536,6 +536,26 @@ void testTimers() {
     DispatchMessage(&msg);
   KillTimer(nullptr, safety);
   CHECK(msg.message == WM_QUIT && msg.wParam == 7);
+
+  // A timer that fires while GetMessage waits comes back from GetMessage as WM_TIMER,
+  // with the procedure in lParam; DispatchMessage delivers it. MeOS relies on that in
+  // mainMessageLoop(0, time), which returns only after GetMessage has returned.
+  events.clear();
+  CHECK(SetTimer(window, 10, 20, nullptr) != 0);
+  CHECK(GetMessage(&msg, nullptr, 0, 0) && msg.message == WM_TIMER && msg.hwnd == window && msg.wParam == 10 &&
+        msg.lParam == 0);
+  CHECK(countOf(window, WM_TIMER) == 0);
+  DispatchMessage(&msg);
+  CHECK(countOf(window, WM_TIMER) == 1);
+  CHECK(KillTimer(window, 10));
+
+  procCalls = 0;
+  CHECK(SetTimer(window, 11, 20, oneShotProc) != 0);
+  CHECK(GetMessage(&msg, nullptr, 0, 0) && msg.message == WM_TIMER && msg.wParam == 11 &&
+        msg.lParam == reinterpret_cast<LPARAM>(&oneShotProc));
+  CHECK(procCalls == 0);
+  DispatchMessage(&msg);
+  CHECK(procCalls == 1 && procWindow == window);
   CHECK(DestroyWindow(window));
 }
 

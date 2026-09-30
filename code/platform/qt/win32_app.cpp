@@ -204,9 +204,10 @@ bool meos_qt::isGuiThread() {
   return app && QThread::currentThread() == app->thread();
 }
 
-// Posted messages come from the queue in win32_message.cpp. Input, painting and
-// timers reach the window procedures directly through Qt, so the loop mainly
-// keeps Qt's event processing going while it waits.
+// Posted messages come from the queue in win32_message.cpp, then WM_QUIT, then
+// the timers that fired while the call waited (as on Windows, WM_TIMER comes last).
+// Input and painting reach the window procedures directly through Qt, so the loop
+// otherwise keeps Qt's event processing going while it waits.
 BOOL GetMessage(LPMSG msg, HWND window, UINT filterMin, UINT filterMax) {
   if (!msg || !meos_qt::isGuiThread()) {
     SetLastError(ERROR_INVALID_PARAMETER);
@@ -225,6 +226,11 @@ BOOL GetMessage(LPMSG msg, HWND window, UINT filterMin, UINT filterMax) {
       quitPosted = false;
       *msg = MSG{nullptr, WM_QUIT, WPARAM(quitExitCode), 0, GetTickCount(), {0, 0}, 0};
       return FALSE;
+    }
+    if (meos_qt::takeTimerMessage(*msg, window, filterMin, filterMax)) {
+      if (meos_qt::hasHooks(WH_GETMESSAGE))
+        meos_qt::callHooks(WH_GETMESSAGE, HC_ACTION, PM_REMOVE, reinterpret_cast<LPARAM>(msg));
+      return TRUE;
     }
     // Qt deletes objects whose deleteLater was called outside any event handler
     // (for example in a posted message dispatched from here) only on request.
