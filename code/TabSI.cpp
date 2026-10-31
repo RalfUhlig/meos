@@ -1545,6 +1545,23 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
       if (pc && pc->getCourse())
         gdi.selectItemByData("Courses", 0);
     }
+    else if (bi.id == "Courses" && gdi.hasWidget("Classes")) {
+      // A course that belongs to exactly one class brings that class along, so the entry
+      // does not end up in one class running the course of another. A course of the
+      // selected class, a course of no class, or one shared by several classes leaves the
+      // class as it is.
+      pCourse crs = oe->getCourse(bi.data);
+      ListBoxInfo cbi;
+      if (crs && gdi.getSelectedItem("Classes", cbi)) {
+        pClass current = oe->getClass(cbi.data);
+        if (!current || !current->usesCourse(*crs)) {
+          vector<pClass> usage;
+          crs->getClasses(usage);
+          if (usage.size() == 1)
+            gdi.selectItemByData("Classes", usage[0]->getId());
+        }
+      }
+    }
     else if (bi.id == "PayMode") {
       updateEntryInfo(gdi);
     }
@@ -3111,7 +3128,7 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
     if (hasResult && !oe->getMeOSFeatures().withoutCourses(*oe)) {
       // Built like the course selection on the runner tab. Course 0 means the course of
       // the class, which is the default whenever the selected class has one.
-      gdi.addSelection("Courses", 200, 300, 0, L"Bana:");
+      gdi.addSelection("Courses", 200, 300, SportIdentCB, L"Bana:");
       oe->fillCourses(gdi, "Courses", { make_pair(L"X", 0) }, true);
       gdi.modifyItemDescription("Courses", 0, lang.tl("[Klassens bana]"));
       gdi.selectItemByData("Courses", r->getCourseId());
