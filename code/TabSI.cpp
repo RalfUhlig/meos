@@ -105,6 +105,15 @@ static void entryTips(gdioutput& gdi) {
   gdi.setRestorePoint("EntryLine");
 }
 
+// The course of a forked individual class that the card fits best, or nullptr. Without a
+// course of their own, competitors in such a class get the fork that follows from their
+// start number, which for a walk-in or an additional race is arbitrary.
+static pCourse bestForkedCourse(pClass cls, const SICard& sic) {
+  if (cls && cls->hasMultiCourse() && cls->getNumStages() == 1)
+    return cls->selectCourseFromPool(0, sic);
+  return nullptr;
+}
+
 void TabSI::logCard(gdioutput& gdi, const SICard& card) {
   if (!logger) {
     logger = make_shared<csvparser>();
@@ -947,6 +956,10 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
         if (oe->isHiredCard(activeSIC.CardNumber)) {
           r->setRentalCard(true);
         }
+
+        // The card matched one of the class's courses exactly, so give the competitor that one.
+        if (pCourse crs = bestForkedCourse(classes[0], activeSIC))
+          r->setCourseId(crs->getId());
         gdi.setData("RunnerId", r->getId());
         TabRunner::saveExtraFields(gdi, *r);
 
@@ -964,12 +977,22 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
 
       gdi.addInput("StartTime", gEvent->getAbsTime(si_copy.StartPunch.Time), 8, 0, L"Starttid:");
 
-      gdi.addSelection("Classes", 200, 300, 0, L"Klass:");
+      gdi.addSelection("Classes", 200, 300, SportIdentCB, L"Klass:");
       gEvent->fillClasses(gdi, "Classes", {}, oEvent::extraNone, oEvent::filterNone);
       gdi.setInputFocus("Classes");
 
       if (classes.size() > 0)
         gdi.selectItemByData("Classes", classes[0]->getId());
+
+      if (!oe->getMeOSFeatures().withoutCourses(*oe)) {
+        // As in the decision dialog. A walk-in may only know the course, and picking it
+        // brings its class along.
+        gdi.addSelection("Courses", 200, 300, SportIdentCB, L"Bana:");
+        oe->fillCourses(gdi, "Courses", { make_pair(L"X", 0) }, true);
+        gdi.modifyItemDescription("Courses", 0, lang.tl("[Klassens bana]"));
+        pCourse crs = bestForkedCourse(classes.empty() ? nullptr : classes[0], activeSIC);
+        gdi.selectItemByData("Courses", crs ? crs->getId() : 0);
+      }
 
       gdi.dropLine();
       gdi.setRestorePoint("restOK2");
@@ -1018,6 +1041,12 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
         r->setRentalCard(true);
       }
 
+      if (gdi.hasWidget("Courses")) {
+        ListBoxInfo cbi;
+        gdi.getSelectedItem("Courses", cbi);
+        r->setCourseId(cbi.data); // 0: the course of the class
+      }
+
       TabRunner::saveExtraFields(gdi, *r);
       r->setStartTimeS(gdi.getText("StartTime"));
       r->setCardNo(activeSIC.CardNumber, false);
@@ -1029,6 +1058,8 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
     }
     else if (bi.id == "NewClass") {
       gdi.restore("restOK2", false);
+      // A new class gets its course from the punches, so a course selection would be ignored.
+      gdi.removeWidget("Courses");
       gdi.popX();
       gdi.dropLine(2);
       gdi.fillRight();
@@ -1540,10 +1571,17 @@ int TabSI::siCB(gdioutput& gdi, GuiEventType type, BaseInfo * data) {
     }
     else if (bi.id == "Classes" && gdi.hasWidget("Courses")) {
       // Default the course back to the course of the class whenever the newly selected
-      // class has one. A class without a course keeps whatever was picked.
+      // class has one. A forked class gets the fork the card fits best, unless the picked
+      // course already is one of its forks. A class without a course keeps whatever was picked.
       pClass pc = oe->getClass(bi.data);
       if (pc && pc->getCourse())
         gdi.selectItemByData("Courses", 0);
+      else if (pCourse fork = bestForkedCourse(pc, activeSIC)) {
+        ListBoxInfo cbi;
+        pCourse picked = gdi.getSelectedItem("Courses", cbi) ? oe->getCourse(cbi.data) : nullptr;
+        if (!picked || !pc->usesCourse(*picked))
+          gdi.selectItemByData("Courses", fork->getId());
+      }
     }
     else if (bi.id == "Courses" && gdi.hasWidget("Classes")) {
       // A course that belongs to exactly one class brings that class along, so the entry
@@ -3125,13 +3163,20 @@ void TabSI::startInteractive(gdioutput& gdi, const SICard& sic, pRunner r, pRunn
         gdi.selectItemByData("Classes", classes[0]->getId());
     }
 
-    if (hasResult && !oe->getMeOSFeatures().withoutCourses(*oe)) {
+    if (!oe->getMeOSFeatures().withoutCourses(*oe)) {
       // Built like the course selection on the runner tab. Course 0 means the course of
-      // the class, which is the default whenever the selected class has one.
+      // the class, which is the default whenever the selected class has one. Without a
+      // course of the competitor's own, a forked class preselects the fork the card fits best.
       gdi.addSelection("Courses", 200, 300, SportIdentCB, L"Bana:");
       oe->fillCourses(gdi, "Courses", { make_pair(L"X", 0) }, true);
       gdi.modifyItemDescription("Courses", 0, lang.tl("[Klassens bana]"));
-      gdi.selectItemByData("Courses", r->getCourseId());
+      int courseId = r->getCourseId();
+      ListBoxInfo cbi;
+      if (courseId == 0 && gdi.getSelectedItem("Classes", cbi)) {
+        if (pCourse fork = bestForkedCourse(oe->getClass(cbi.data), sic))
+          courseId = fork->getId();
+      }
+      gdi.selectItemByData("Courses", courseId);
     }
 
     gdi.setInputFocus("Classes");
