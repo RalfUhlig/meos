@@ -20,6 +20,15 @@ Personal additions, not proposed upstream.
   the additional race. A rental card handed out twice becomes visible before anything is
   written, and "Another competitor" leads back to selecting one by name. With the option off,
   nothing of this happens.
+- **Course and class kept together on readout** — the readout dialogs ask for the course also for
+  a new competitor from an unknown card and for one without a class, so a walk-in who only knows
+  the course can be entered by it. Picking a course that belongs to exactly one class selects
+  that class; a course of no class keeps the class, also when the class is changed afterwards.
+  In a forked class the fork the card fits best is preselected instead of the one that would
+  follow from the start number. With multiple races per competitor allowed, the course the card
+  completes — searched over all courses, those of no class included — is proposed together with
+  its class, for the operator to confirm. Without that option, a completed course of another
+  class stays what it is in a regular competition: a mispunch.
 - **Course based results** — a new MeOS feature switch (Teams and forking): courses forked from
   one IOF XML 3.0 course family are ranked as a single course in course result lists, including
   the time behind, and the card readout reports the place within class and course instead of the
