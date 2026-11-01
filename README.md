@@ -48,6 +48,8 @@ Personal additions, not proposed upstream.
   definition still loads in upstream MeOS — it is just ordered by creation there.
 - **Duplicate** on the runner tab prepares a second entry for a competitor by hand, for a repeat
   start announced at the entry desk; the readout then picks it up without asking.
+  Both the duplicate and the additional race on readout keep a rental card marked as rental;
+  its fee stays with the first entry.
 
 Smaller: the card readout line shows the course when it differs from the class name, a card
 stored unpaired names the competitor its number belongs to, and the German translation of the

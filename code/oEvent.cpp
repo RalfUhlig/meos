@@ -2077,7 +2077,9 @@ pRunner oEvent::addSecondRaceEntry(pRunner src, int classId, int courseId) {
 
   oDataInterface di = pr->getDI();
   di.setInt("Fee", 0);
-  di.setInt("CardFee", 0); // A rental card is paid for with the first entry only
+  // A rental card stays a rental card, but it is paid for with the first entry only.
+  // CardFee -1 marks a rental card without fee.
+  di.setInt("CardFee", src->isRentalCard() ? -1 : 0);
   di.setInt("Paid", 0);
   di.setInt("Taxable", 0);
   di.setString("Bib", L"");
