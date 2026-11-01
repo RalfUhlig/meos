@@ -1658,6 +1658,49 @@ int oCourse::getResultCourseId() const {
   return resultCourseId.get();
 }
 
+int oCourse::getResultCourseSortIndex() const {
+  if (!resultCourseSortIndex.needsUpdate(*oe))
+    return resultCourseSortIndex.get();
+
+  vector<pCourse> crs;
+  oe->getCourses(crs);
+
+  // Result course id -> the name it is listed under (family name if families are merged)
+  map<int, wstring> resultCourseName;
+  const bool merge = oe->mergeCourseFamilies();
+  for (pCourse c : crs) {
+    wstring cName, family;
+    c->getNameAndFamily(cName, family);
+    resultCourseName.emplace(c->getResultCourseId(), merge && !family.empty() ? family : c->getName());
+  }
+
+  vector<pair<wstring, int>> order(resultCourseName.size());
+  size_t ix = 0;
+  for (auto &rc : resultCourseName)
+    order[ix++] = make_pair(rc.second, rc.first);
+
+  stable_sort(order.begin(), order.end(), [](const pair<wstring, int> &a, const pair<wstring, int> &b) {
+    int cmp = CompareString(LOCALE_USER_DEFAULT, NORM_IGNORECASE | SORT_DIGITSASNUMBERS,
+                            a.first.c_str(), a.first.length(),
+                            b.first.c_str(), b.first.length());
+    if (cmp != CSTR_EQUAL)
+      return cmp == CSTR_LESS_THAN;
+    return a.second < b.second;
+  });
+
+  map<int, int> sortIndex;
+  for (size_t k = 0; k < order.size(); k++)
+    sortIndex[order[k].second] = int(k) + 1;
+
+  for (pCourse c : crs)
+    c->resultCourseSortIndex.update(*oe, sortIndex[c->getResultCourseId()]);
+
+  if (resultCourseSortIndex.needsUpdate(*oe))
+    resultCourseSortIndex.update(*oe, int(order.size()) + 1); // Not part of the competition's courses
+
+  return resultCourseSortIndex.get();
+}
+
 int oCourse::getBestTime() const {
   if (!bestTime.needsUpdate(*oe))
     return bestTime.get();
