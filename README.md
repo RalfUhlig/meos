@@ -35,6 +35,11 @@ Personal additions, not proposed upstream.
   class place. Course identity is untouched, so a swapped fork is still a mispunch. Lists need no
   extra element: with a course sort order the group header follows the ranking on its own. The
   switch is left out of "all features" so that it stays a deliberate choice.
+- **Courses sorted by name** — the course sort orders (course result, class and course result,
+  course start time, also with a result module) list the courses by name, with numbers compared
+  by value (301, 302, …, 310), instead of in the order they were created. With course families
+  merged, a family is placed by its family name. No new sort order is introduced, so a list
+  definition still loads in upstream MeOS — it is just ordered by creation there.
 - **Duplicate** on the runner tab prepares a second entry for a competitor by hand, for a repeat
   start announced at the entry desk; the readout then picks it up without asking.
 
