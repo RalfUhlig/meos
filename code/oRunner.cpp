@@ -2246,8 +2246,8 @@ bool oRunner::operator<(const oRunner &c) const {
     RunnerStatus stat = getStatusComputed(false);
     RunnerStatus cstat = c.getStatusComputed(false);
 
-    int id1 = crs1 ? crs1->getResultCourseId() : 0;
-    int id2 = crs2 ? crs2->getResultCourseId() : 0;
+    int id1 = crs1 ? crs1->getResultCourseSortIndex() : 0;
+    int id2 = crs2 ? crs2->getResultCourseSortIndex() : 0;
 
     if (id1 != id2) {
       return id1 < id2;
@@ -2442,8 +2442,8 @@ bool oRunner::operator<(const oRunner &c) const {
     RunnerStatus stat = getStatusComputed(false);
     RunnerStatus cstat = c.getStatusComputed(false);
 
-    int id1 = crs1 ? crs1->getResultCourseId() : 0;
-    int id2 = crs2 ? crs2->getResultCourseId() : 0;
+    int id1 = crs1 ? crs1->getResultCourseSortIndex() : 0;
+    int id2 = crs2 ? crs2->getResultCourseSortIndex() : 0;
 
     if (id1 != id2) {
       return id1 < id2;
@@ -2469,8 +2469,8 @@ bool oRunner::operator<(const oRunner &c) const {
   else if (oe->CurrentSortOrder == CourseStartTime) {
     const pCourse crs1 = getCourse(false);
     const pCourse crs2 = c.getCourse(false);
-    int id1 = crs1 ? crs1->getResultCourseId() : 0;
-    int id2 = crs2 ? crs2->getResultCourseId() : 0;
+    int id1 = crs1 ? crs1->getResultCourseSortIndex() : 0;
+    int id2 = crs2 ? crs2->getResultCourseSortIndex() : 0;
 
     if (id1 != id2) {
       return id1 < id2;

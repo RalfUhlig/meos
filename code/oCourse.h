@@ -83,6 +83,9 @@ protected:
   // otherwise the course's own id.
   DataRevisionCache<int> resultCourseId;
 
+  // Position of this course's result course when ordered by name.
+  DataRevisionCache<int> resultCourseSortIndex;
+
   DataRevisionCache<int> maxRGPoints;
   /** Get internal data buffers for DI */
   oDataContainer &getDataBuffers(pvoid &data, pvoid &olddata, pvectorstr &strData) const;
@@ -253,6 +256,11 @@ public:
       courses of one family share the id of the family's first course. Otherwise
       the course's own id. Never use this to identify a course.*/
   int getResultCourseId() const;
+
+  /** Sort key for ordering results by course: the position of the result course
+      (see getResultCourseId) when ordered by name, with numbers compared by value
+      (301, 302, ..., 310). Courses sharing a result course share the key.*/
+  int getResultCourseSortIndex() const;
 
   int getLength() const {return length;}
   wstring getLengthS() const;
