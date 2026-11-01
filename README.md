@@ -20,6 +20,12 @@ Personal additions, not proposed upstream.
   the additional race. A rental card handed out twice becomes visible before anything is
   written, and "Another competitor" leads back to selecting one by name. With the option off,
   nothing of this happens.
+- **Card owner from the competition, not the runner database** — a card whose number an entry of
+  the competition already carries is no longer looked up in the runner database. For a rental
+  card the database names whoever the card was once registered to, and a card read while
+  another tab was open could silently enter that person and give them the result. The
+  additional race is now also recognised for a card read in the background, which then waits
+  for the operator on the SportIdent page.
 - **Course and class kept together on readout** — the readout dialogs ask for the course also for
   a new competitor from an unknown card and for one without a class, so a walk-in who only knows
   the course can be entered by it. Picking a course that belongs to exactly one class selects
