@@ -60,6 +60,9 @@ private:
       Returns nullptr when the number belongs to nobody that has been read out. */
   pRunner findAdditionalRaceSource(const SICard &sic) const;
 
+  /** True if any entry of the competition carries this card number, read out or not. */
+  bool cardHasEntry(int cardNo) const;
+
   void processPunchOnly(gdioutput &gdi, const SICard &sic);
   void startInteractive(gdioutput &gdi, const SICard &sic,
                         pRunner r, pRunner db_r);

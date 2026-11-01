@@ -2876,7 +2876,14 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
       throw meosException("Internal error");
     //SIPage not loaded...
 
-    if (!r && showDatabase())
+    // The same lookup as with the page loaded below: without it, a competitor's additional
+    // race went straight to the runner database and could be assigned to someone else.
+    if (!r && multipleStarts && interactiveReadout && !readBefore) {
+      r = findAdditionalRaceSource(sic);
+      sameCardNewRace = r != nullptr;
+    }
+
+    if (!r && showDatabase() && !cardHasEntry(sic.CardNumber))
       r = autoMatch(sic, 0);
 
     // Assign a class if not already done
@@ -2991,7 +2998,11 @@ void TabSI::insertSICardAux(gdioutput& gdi, SICard& sic)
     else
       r = multipleStarts ? findAdditionalRaceSource(sic) : getRunnerForCardSplitPrint(sic);
 
-    if (!r && showDatabase()) {
+    // The runner database knows whom a card was registered to, which for a rental card or
+    // one handed on is not who runs with it. Once an entry of the competition carries the
+    // number, the database can only name a stranger, and autoMatch would even enter that
+    // stranger without asking. Leave the choice to the operator instead.
+    if (!r && showDatabase() && !cardHasEntry(sic.CardNumber)) {
       //Look up in database.
       db_r = gEvent->dbLookUpByCard(sic.CardNumber);
       if (db_r)
@@ -3067,6 +3078,15 @@ pRunner TabSI::findAdditionalRaceSource(const SICard& sic) const {
   }
 
   return best;
+}
+
+bool TabSI::cardHasEntry(int cardNo) const {
+  if (cardNo == 0)
+    return false; // getRunnersByCardNo would list everyone without a card number
+
+  vector<pRunner> out;
+  oe->getRunnersByCardNo(cardNo, false, oEvent::CardLookupProperty::IncludeNotCompeting, out);
+  return !out.empty();
 }
 
 pRunner TabSI::getRunnerForCardSplitPrint(const SICard& sic) const {
