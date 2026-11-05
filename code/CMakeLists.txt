@@ -283,14 +283,26 @@ if(NOT WIN32)
   set(MEOS_TEST_UBSAN_OPTIONS
     "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1:suppressions=${CMAKE_CURRENT_SOURCE_DIR}/platform/qt/tests/ubsan_suppressions.txt")
 
+  # The environment of a test that runs MeOS code: offscreen, UBSan as above, and none of
+  # the user's folders. Settings and competitions go to <name>_data (XDG_DATA_HOME); the
+  # desktop and documents folders, where MeOS writes its card readout logs
+  # (TabSI::logCard) and exports, to <name>_desktop and <name>_documents through a
+  # user-dirs.dirs in <name>_config (XDG_CONFIG_HOME), which Qt reads for them.
+  function(meos_set_test_environment test name)
+    set(base "${CMAKE_CURRENT_BINARY_DIR}/${name}")
+    file(WRITE "${base}_config/user-dirs.dirs"
+      "XDG_DESKTOP_DIR=\"${base}_desktop\"\nXDG_DOCUMENTS_DIR=\"${base}_documents\"\n")
+    set_tests_properties(${test} PROPERTIES
+      ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${base}_data;XDG_CONFIG_HOME=${base}_config;${MEOS_TEST_UBSAN_OPTIONS}")
+  endfunction()
+
   # Builds every page and writes its screenshot and layout (stage 1.2.7). The only
   # test that runs real gdioutput pages; the files are meant for the comparison with
   # a Windows run (docs/BUILD_LINUX.md).
   add_test(NAME workbench_shot
            COMMAND meos_gui_workbench -shot "${CMAKE_CURRENT_BINARY_DIR}/workbench_shot/linux")
-  set_tests_properties(workbench_shot PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/workbench_shot_data;${MEOS_TEST_UBSAN_OPTIONS}"
-    TIMEOUT 300)
+  meos_set_test_environment(workbench_shot workbench_shot)
+  set_tests_properties(workbench_shot PROPERTIES TIMEOUT 300)
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/workbench_shot")
 
   # Load test of the core (stage 1.2.6): competition file round trip, results, result
@@ -300,9 +312,8 @@ if(NOT WIN32)
   target_include_directories(meos_core_load_test PRIVATE platform/qt/workbench)
   meos_link_meos(meos_core_load_test)
   add_test(NAME core_load_test COMMAND meos_core_load_test)
-  set_tests_properties(core_load_test PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/core_load_test_data;${MEOS_TEST_UBSAN_OPTIONS}"
-    TIMEOUT 300)
+  meos_set_test_environment(core_load_test core_load_test)
+  set_tests_properties(core_load_test PROPERTIES TIMEOUT 300)
 
   # The tests of registerTests() (tests.cpp, stage 1.3.5) in the frame of MeOS without
   # meos.cpp (decision E11). They drive the real tabs through TestMeOS.
@@ -311,9 +322,8 @@ if(NOT WIN32)
   target_include_directories(meos_gui_tests PRIVATE platform/qt/workbench)
   meos_link_meos(meos_gui_tests)
   add_test(NAME gui_tests COMMAND meos_gui_tests)
-  set_tests_properties(gui_tests PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/gui_tests_data;${MEOS_TEST_UBSAN_OPTIONS}"
-    TIMEOUT 300)
+  meos_set_test_environment(gui_tests gui_tests)
+  set_tests_properties(gui_tests PROPERTIES TIMEOUT 300)
 
   # Replays recorded traffic of an SI master station through a pseudo terminal and
   # reads the cards with the real SportIdent class (stage 1.3.6). The traces are
@@ -324,9 +334,8 @@ if(NOT WIN32)
   meos_link_meos(meos_si_replay_test)
   add_test(NAME si_replay_test
            COMMAND meos_si_replay_test "${CMAKE_CURRENT_SOURCE_DIR}/platform/qt/tests/si_traces")
-  set_tests_properties(si_replay_test PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/si_replay_test_data;${MEOS_TEST_UBSAN_OPTIONS}"
-    TIMEOUT 300)
+  meos_set_test_environment(si_replay_test si_replay_test)
+  set_tests_properties(si_replay_test PROPERTIES TIMEOUT 300)
 
   # The MySQL headers in code/mysql (used by mysqlwrapper.cpp) match those of the linked
   # client library. mysql_api_vendored.cpp finds "mysql/mysql.h" in code/, the system
