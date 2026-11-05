@@ -45,13 +45,21 @@ int meos_platform::currentThreadWakeDescriptor() {
   return currentThread ? currentThread->wakeDescriptor() : -1;
 }
 
+void meos_platform::endCancelledThread() {
+  throw ThreadTerminated();
+}
+
 std::uintptr_t _beginthread(void (*start)(void *), unsigned /*stackSize*/, void *argument) {
   auto thread = std::make_shared<meos_platform::ThreadObject>();
   const HANDLE handle = meos_platform::registerObject(thread);
 
   std::thread([thread, start, argument, handle] {
     currentThread = thread;
-    start(argument);
+    try {
+      start(argument);
+    } catch (const meos_platform::ThreadTerminated &) {
+      // Terminated with TerminateThread while it waited.
+    }
     thread->finished = true;
     currentThread.reset();
     // As with _beginthread on Windows, the handle stops being valid here.
@@ -72,7 +80,11 @@ std::uintptr_t _beginthreadex(void * /*security*/, unsigned /*stackSize*/,
   // Unlike _beginthread, the caller owns the handle and closes it.
   std::thread([thread, start, argument] {
     currentThread = thread;
-    thread->exitCode = start(argument);
+    try {
+      thread->exitCode = start(argument);
+    } catch (const meos_platform::ThreadTerminated &) {
+      // TerminateThread was called with an exit code that this layer does not keep.
+    }
     thread->finished = true;
     currentThread.reset();
   }).detach();
@@ -120,8 +132,10 @@ void Sleep(DWORD milliseconds) {
     pollfd waited = {wake, POLLIN, 0};
     const int ready = ::poll(wake >= 0 ? &waited : nullptr, wake >= 0 ? 1 : 0,
                              static_cast<int>(deadline - now));
-    if (ready != 0 && !(ready < 0 && errno == EINTR))
-      return; // The thread was asked to end, or poll failed.
+    if (ready > 0)
+      meos_platform::endCancelledThread(); // TerminateThread was called.
+    if (ready < 0 && errno != EINTR)
+      return; // poll failed.
   }
 }
 

@@ -200,7 +200,7 @@ HANDLE CreateFile(LPCWSTR fileName, DWORD access, DWORD /*shareMode*/, LPSECURIT
   SetLastError(ERROR_SUCCESS);
 
   if (::isatty(fd))
-    return meos_platform::registerObject(meos_platform::makeSerialObject(fd));
+    return meos_platform::registerObject(meos_platform::makeSerialObject(fd, path));
 
   ::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL, 0) & ~O_NONBLOCK);
   return meos_platform::registerObject(std::make_shared<meos_platform::FileObject>(fd));

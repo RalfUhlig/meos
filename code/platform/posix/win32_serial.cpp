@@ -20,8 +20,29 @@
 // The mapping does not depend on what is plugged in, so a port selected for a
 // competition still means the same device later. A device path (/dev/ttyUSB0) may
 // also be given instead of a COM name.
+//
+// MEOS_SERIAL_TRACE=<file> records the traffic of every serial port as text, one
+// line per event: seconds since the trace started, the port, and what happened.
+//
+//      0.000412 COM1 open /dev/ttyUSB0
+//      0.000530 COM1 state 38400 8N1
+//      0.000601 COM1 > 02 F0 01 4D 6D 0A 03
+//      0.019877 COM1 < 02 F0 03 ...
+//      5.310000 COM1 ! wait: device gone (error 5)
+//      5.310112 COM1 close
+//
+// ">" is written to the station, "<" read from it, one line per read() or write().
+// The file is replaced when the first port of a process opens it.
 
 #include "win32_thread.h"
+
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
+#include <map>
+#include <mutex>
+#include <string>
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -47,10 +68,101 @@ constexpr PortFamily portFamilies[] = {
   {"ttyS", 65, 32},
 };
 
+// The trace file of MEOS_SERIAL_TRACE, shared by all ports that name the same file.
+class SerialTrace {
+public:
+  // The trace the environment asks for, or nullptr. A file stays open until the
+  // process ends, so a port that is closed and opened again appends to it.
+  static std::shared_ptr<SerialTrace> fromEnvironment() {
+    const char *path = std::getenv("MEOS_SERIAL_TRACE");
+    if (!path || !*path)
+      return nullptr;
+
+    static std::mutex tracesMutex;
+    // Never destroyed: ports may still close while static objects are torn down.
+    static auto *traces = new std::map<std::string, std::shared_ptr<SerialTrace>>();
+    std::lock_guard<std::mutex> lock(tracesMutex);
+    std::shared_ptr<SerialTrace> &trace = (*traces)[path];
+    if (!trace) {
+      FILE *file = std::fopen(path, "w");
+      if (!file)
+        return nullptr;
+      trace.reset(new SerialTrace(file));
+    }
+    return trace;
+  }
+
+  void text(const std::string &port, const std::string &message) {
+    std::lock_guard<std::mutex> lock(mutex);
+    writePrefix(port);
+    std::fprintf(file, "%s\n", message.c_str());
+    std::fflush(file);
+  }
+
+  void bytes(const std::string &port, char direction, const BYTE *data, std::size_t count) {
+    std::lock_guard<std::mutex> lock(mutex);
+    writePrefix(port);
+    std::fputc(direction, file);
+    for (std::size_t i = 0; i < count; i++)
+      std::fprintf(file, " %02X", data[i]);
+    std::fputc('\n', file);
+    std::fflush(file);
+  }
+
+private:
+  explicit SerialTrace(FILE *file) : file(file), start(std::chrono::steady_clock::now()) {
+    const std::time_t now = std::time(nullptr);
+    char stamp[32] = {0};
+    std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+    std::fprintf(file, "# MeOS serial trace, started %s\n", stamp);
+    std::fflush(file);
+  }
+
+  void writePrefix(const std::string &port) {
+    const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - start);
+    std::fprintf(file, "%6lld.%06lld %s ", static_cast<long long>(elapsed.count() / 1000000),
+                 static_cast<long long>(elapsed.count() % 1000000), port.c_str());
+  }
+
+  std::mutex mutex;
+  FILE *const file;
+  const std::chrono::steady_clock::time_point start;
+};
+
 class SerialObject : public meos_platform::FileObject {
 public:
-  explicit SerialObject(int fd) : FileObject(fd) {}
+  SerialObject(int fd, std::string name)
+      : FileObject(fd), name(std::move(name)), trace(SerialTrace::fromEnvironment()) {}
 
+  ~SerialObject() override {
+    note("close");
+  }
+
+  void note(const std::string &message) const {
+    if (trace)
+      trace->text(name, message);
+  }
+
+  void traceBytes(char direction, const BYTE *data, std::size_t count) const {
+    if (trace && count > 0)
+      trace->bytes(name, direction, data, count);
+  }
+
+  // Records a failed call, with the error it leaves behind.
+  void noteError(const std::string &call) const {
+    if (!trace)
+      return;
+    const DWORD error = GetLastError();
+    const char *meaning = error == ERROR_OPERATION_ABORTED ? "thread terminated"
+                          : error == ERROR_ACCESS_DENIED   ? "device gone"
+                                                           : "failed";
+    trace->text(name, std::string("! ") + call + ": " + meaning + " (error " +
+                          std::to_string(error) + ")");
+  }
+
+  const std::string name;
+  const std::shared_ptr<SerialTrace> trace;
   DCB state{};
   COMMTIMEOUTS timeouts{};
   DWORD eventMask = 0;
@@ -96,14 +208,21 @@ int comNumberOfDeviceName(const std::string &name) {
   return 0;
 }
 
-// Linux creates /dev/ttyS0 to /dev/ttyS31 whether or not there is a UART behind them.
-// Only ports that a driver has bound are real.
+// Linux creates /dev/ttyS0 to /dev/ttyS31 whether or not there is a UART behind them,
+// and the serial8250 driver binds all of them. Only a port whose UART type is known
+// (sysfs "type" other than 0, PORT_UNKNOWN) is real; Windows lists only those.
 bool deviceExists(const std::string &name) {
   if (::access(("/dev/" + name).c_str(), F_OK) != 0)
     return false;
   if (name.compare(0, 4, "ttyS") != 0)
     return true;
-  return ::access(("/sys/class/tty/" + name + "/device").c_str(), F_OK) == 0;
+  FILE *type = std::fopen(("/sys/class/tty/" + name + "/type").c_str(), "r");
+  if (!type)
+    return false;
+  int uart = 0;
+  const bool known = std::fscanf(type, "%d", &uart) == 1 && uart != 0;
+  std::fclose(type);
+  return known;
 }
 
 std::vector<int> availablePorts() {
@@ -245,19 +364,31 @@ WaitResult waitFor(int fd, short events, int timeout) {
       SetLastError(ERROR_OPERATION_ABORTED);
       return WaitResult::Cancelled;
     }
-    if (waited[0].revents & events)
+    const short revents = waited[0].revents;
+    if (!(revents & (POLLHUP | POLLERR | POLLNVAL)) && (revents & events))
       return WaitResult::Ready;
-    // POLLHUP or POLLERR without data: the device is gone (adapter unplugged).
-    SetLastError(ERROR_OPERATION_ABORTED);
+    // The device is gone (adapter unplugged). A hung-up terminal reports itself
+    // readable as well, and read() then returns 0 bytes forever, so "readable" only
+    // counts while received bytes are still waiting; ioctl fails on a hung-up
+    // terminal. On Windows the pending WaitCommEvent or ReadFile fails, and MeOS
+    // closes the port; it does not look at the error code, which differs between
+    // drivers. ERROR_ACCESS_DENIED is what the handle of a removed device gives.
+    int waiting = 0;
+    if ((events & POLLIN) && (revents & POLLIN) && ::ioctl(fd, FIONREAD, &waiting) == 0 && waiting > 0)
+      return WaitResult::Ready;
+    SetLastError(ERROR_ACCESS_DENIED);
     return WaitResult::Failed;
   }
 }
 
 } // namespace
 
-std::shared_ptr<meos_platform::Win32Object> meos_platform::makeSerialObject(int fd) {
+std::shared_ptr<meos_platform::Win32Object> meos_platform::makeSerialObject(int fd,
+                                                                           const std::string &path) {
   configureRawMode(fd);
-  return std::make_shared<SerialObject>(fd);
+  auto port = std::make_shared<SerialObject>(fd, path);
+  port->note("open " + path);
+  return port;
 }
 
 std::shared_ptr<meos_platform::Win32Object> meos_platform::openSerialPort(const std::string &name,
@@ -283,7 +414,9 @@ std::shared_ptr<meos_platform::Win32Object> meos_platform::openSerialPort(const 
     return nullptr;
   }
   SetLastError(ERROR_SUCCESS);
-  return std::make_shared<SerialObject>(fd);
+  auto port = std::make_shared<SerialObject>(fd, name);
+  port->note("open " + path);
+  return port;
 }
 
 // Reads until the buffer is full or a timeout expires. As on Windows an expired
@@ -316,6 +449,8 @@ BOOL ReadFile(HANDLE file, LPVOID buffer, DWORD count, LPDWORD read, LPVOID /*ov
   while (got < count) {
     const ssize_t bytes = ::read(object->fd, out + got, count - got);
     if (bytes > 0) {
+      if (port)
+        port->traceBytes('<', out + got, static_cast<std::size_t>(bytes));
       got += static_cast<DWORD>(bytes);
       if (interval)
         intervalDeadline = GetTickCount64() + interval;
@@ -331,6 +466,8 @@ BOOL ReadFile(HANDLE file, LPVOID buffer, DWORD count, LPDWORD read, LPVOID /*ov
         continue;
       if (errno != EAGAIN && errno != EWOULDBLOCK) {
         SetLastError(meos_platform::win32ErrorFromErrno(errno));
+        if (port)
+          port->noteError("read");
         return FALSE;
       }
     }
@@ -341,8 +478,13 @@ BOOL ReadFile(HANDLE file, LPVOID buffer, DWORD count, LPDWORD read, LPVOID /*ov
     const WaitResult result = waitFor(object->fd, POLLIN, timeout);
     if (result == WaitResult::TimedOut)
       break;
-    if (result != WaitResult::Ready)
+    if (result != WaitResult::Ready) {
+      if (port)
+        port->noteError("read");
+      if (result == WaitResult::Cancelled)
+        meos_platform::endCancelledThread();
       return FALSE;
+    }
   }
 
   if (read)
@@ -376,6 +518,8 @@ BOOL WriteFile(HANDLE file, LPCVOID buffer, DWORD count, LPDWORD written, LPVOID
   while (done < count) {
     const ssize_t bytes = ::write(object->fd, in + done, count - done);
     if (bytes > 0) {
+      if (port)
+        port->traceBytes('>', in + done, static_cast<std::size_t>(bytes));
       done += static_cast<DWORD>(bytes);
       continue;
     }
@@ -383,6 +527,8 @@ BOOL WriteFile(HANDLE file, LPCVOID buffer, DWORD count, LPDWORD written, LPVOID
       continue;
     if (bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
       SetLastError(meos_platform::win32ErrorFromErrno(errno));
+      if (port)
+        port->noteError("write");
       return FALSE;
     }
 
@@ -392,8 +538,13 @@ BOOL WriteFile(HANDLE file, LPCVOID buffer, DWORD count, LPDWORD written, LPVOID
     const WaitResult result = waitFor(object->fd, POLLOUT, timeout);
     if (result == WaitResult::TimedOut)
       break;
-    if (result != WaitResult::Ready)
+    if (result != WaitResult::Ready) {
+      if (port)
+        port->noteError("write");
+      if (result == WaitResult::Cancelled)
+        meos_platform::endCancelledThread();
       return FALSE;
+    }
   }
 
   if (written)
@@ -415,9 +566,17 @@ BOOL SetCommState(HANDLE file, LPDCB state) {
   const std::shared_ptr<SerialObject> port = serialFromHandle(file);
   if (!port || !state)
     return FALSE;
-  if (!applyState(port->fd, *state))
+  if (!applyState(port->fd, *state)) {
+    port->noteError("state " + std::to_string(state->BaudRate));
     return FALSE;
+  }
   port->state = *state;
+  if (port->trace) {
+    const char parity = state->Parity == ODDPARITY ? 'O' : state->Parity == EVENPARITY ? 'E' : 'N';
+    const int byteSize = state->ByteSize >= 5 && state->ByteSize <= 7 ? state->ByteSize : 8;
+    port->note("state " + std::to_string(state->BaudRate) + " " + std::to_string(byteSize) + parity +
+               (state->StopBits == TWOSTOPBITS ? "2" : "1"));
+  }
   return TRUE;
 }
 
@@ -434,6 +593,14 @@ BOOL SetCommTimeouts(HANDLE file, COMMTIMEOUTS *timeouts) {
   if (!port || !timeouts)
     return FALSE;
   port->timeouts = *timeouts;
+  if (port->trace) {
+    const COMMTIMEOUTS &t = *timeouts;
+    port->note("timeouts interval " + std::to_string(t.ReadIntervalTimeout) + ", read " +
+               std::to_string(t.ReadTotalTimeoutMultiplier) + "/byte + " +
+               std::to_string(t.ReadTotalTimeoutConstant) + ", write " +
+               std::to_string(t.WriteTotalTimeoutMultiplier) + "/byte + " +
+               std::to_string(t.WriteTotalTimeoutConstant));
+  }
   return TRUE;
 }
 
@@ -457,8 +624,13 @@ BOOL WaitCommEvent(HANDLE file, LPDWORD mask, LPVOID /*overlapped*/) {
     return FALSE;
   }
 
-  if (waitFor(port->fd, POLLIN, -1) != WaitResult::Ready)
+  const WaitResult result = waitFor(port->fd, POLLIN, -1);
+  if (result != WaitResult::Ready) {
+    port->noteError("wait");
+    if (result == WaitResult::Cancelled)
+      meos_platform::endCancelledThread();
     return FALSE;
+  }
   if (mask)
     *mask = EV_RXCHAR;
   SetLastError(ERROR_SUCCESS);

@@ -18,10 +18,13 @@
 #include <wininet.h>
 #include <winsock2.h>
 
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <sstream>
+#include <thread>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -370,6 +373,22 @@ void testThreads() {
     Sleep(10);
   CHECK(!GetExitCodeThread(thread, &exitCode));
 
+  // TerminateThread ends a thread inside Sleep, which does not return to it.
+  static std::atomic<int> sleeper{0};
+  const HANDLE sleeping = reinterpret_cast<HANDLE>(_beginthread(
+      [](void *) {
+        sleeper = 1;
+        Sleep(10000);
+        sleeper = 2;
+      },
+      0, nullptr));
+  for (int wait = 0; wait < 100 && sleeper == 0; wait++)
+    Sleep(10);
+  CHECK(TerminateThread(sleeping, 0));
+  for (int wait = 0; wait < 100 && GetExitCodeThread(sleeping, &exitCode); wait++)
+    Sleep(10);
+  CHECK(!GetExitCodeThread(sleeping, &exitCode) && sleeper == 1);
+
   // _beginthreadex (mysqldaemon.cpp): the handle stays valid until CloseHandle and
   // reports the return value of the thread function.
   static std::atomic<bool> release{false};
@@ -391,6 +410,72 @@ void testThreads() {
   CHECK(!CloseHandle(threadEx));
 }
 
+// Unplugging the USB adapter of a master station hangs up its terminal. Closing the
+// master side of a pseudo terminal does the same to the slave side. A thread waiting
+// in WaitCommEvent must then fail, as on Windows, where SportIdent.cpp closes the
+// port on that failure; a hung-up terminal reports itself readable, and taking that
+// literally kept MeOS spinning in its read loop (1.3.6).
+void testSerialPortHangup() {
+  const int master = ::posix_openpt(O_RDWR | O_NOCTTY);
+  CHECK(master >= 0);
+  if (master < 0)
+    return;
+  CHECK(::grantpt(master) == 0 && ::unlockpt(master) == 0);
+  char name[64] = {0};
+  CHECK(::ptsname_r(master, name, sizeof(name)) == 0);
+  const HANDLE port = CreateFile(meos_compat::utf8ToWide(name).c_str(), GENERIC_READ | GENERIC_WRITE, 0,
+                                 nullptr, OPEN_EXISTING, 0, nullptr);
+  CHECK(port != INVALID_HANDLE_VALUE);
+  if (port == INVALID_HANDLE_VALUE) {
+    ::close(master);
+    return;
+  }
+  COMMTIMEOUTS timeouts = {};
+  timeouts.ReadTotalTimeoutConstant = 500;
+  CHECK(SetCommTimeouts(port, &timeouts));
+  CHECK(SetCommMask(port, EV_RXCHAR));
+
+  struct Waiter {
+    HANDLE port;
+    std::atomic<bool> waiting{false};
+    std::atomic<bool> done{false};
+    std::atomic<BOOL> result{TRUE};
+    std::atomic<DWORD> error{0};
+  };
+  // Shared with the thread, which outlives this function if WaitCommEvent hangs.
+  const auto waiter = std::make_shared<Waiter>();
+  waiter->port = port;
+  std::thread monitor([waiter] {
+    DWORD mask = 0;
+    waiter->waiting = true;
+    waiter->result = WaitCommEvent(waiter->port, &mask, nullptr);
+    waiter->error = GetLastError();
+    waiter->done = true;
+  });
+  for (int wait = 0; wait < 100 && !waiter->waiting; wait++)
+    Sleep(10);
+  Sleep(50);
+  CHECK(!waiter->done);
+  ::close(master); // The adapter is unplugged.
+  for (int wait = 0; wait < 100 && !waiter->done; wait++)
+    Sleep(10);
+  CHECK(waiter->done && !waiter->result && waiter->error == ERROR_ACCESS_DENIED);
+  if (waiter->done)
+    monitor.join();
+  else
+    monitor.detach();
+
+  // Later calls fail at once, instead of waiting for the read timeout.
+  const std::uint64_t start = GetTickCount64();
+  DWORD event = 0;
+  CHECK(!WaitCommEvent(port, &event, nullptr) && GetLastError() == ERROR_ACCESS_DENIED);
+  BYTE buffer[4] = {0};
+  DWORD got = 1;
+  CHECK(!ReadFile(port, buffer, sizeof(buffer), &got, nullptr) && got == 0);
+  CHECK(GetTickCount64() - start < 400);
+  CHECK(CloseHandle(port));
+}
+
 // A pseudo terminal stands in for the serial port of an SI master station.
 void testSerialPort() {
   const int master = ::posix_openpt(O_RDWR | O_NOCTTY);
@@ -400,6 +485,11 @@ void testSerialPort() {
   CHECK(::grantpt(master) == 0 && ::unlockpt(master) == 0);
   char name[64] = {0};
   CHECK(::ptsname_r(master, name, sizeof(name)) == 0);
+
+  // MEOS_SERIAL_TRACE records the traffic of the port (checked after CloseHandle).
+  const std::string tracePath =
+      std::string(P_tmpdir) + "/meos_serial_trace_" + std::to_string(::getpid()) + ".txt";
+  ::setenv("MEOS_SERIAL_TRACE", tracePath.c_str(), 1);
 
   const HANDLE port = CreateFile(meos_compat::utf8ToWide(name).c_str(), GENERIC_READ | GENERIC_WRITE, 0,
                                  nullptr, OPEN_EXISTING, 0, nullptr);
@@ -472,35 +562,72 @@ void testSerialPort() {
   sender.join();
   CHECK(ReadFile(port, buffer, 1, &got, nullptr) && got == 1 && buffer[0] == 0xD3);
 
-  // TerminateThread ends a thread that waits for the next punch.
+  // TerminateThread ends a thread that waits for the next punch, as on Windows
+  // without returning from WaitCommEvent: SportIdent::MonitorSI would otherwise go on
+  // with the object its terminator deletes next (1.3.6). The thread unwinds instead,
+  // so destructors run, and a catch (...) as in start_si_thread sees it.
   struct Waiter {
     HANDLE port;
     std::atomic<bool> waiting{false};
-    std::atomic<bool> done{false};
-    std::atomic<DWORD> error{0};
+    std::atomic<bool> returned{false};
+    std::atomic<bool> unwound{false};
+    std::atomic<bool> caught{false};
   } waiter{port};
   const HANDLE monitor = reinterpret_cast<HANDLE>(_beginthread(
       [](void *argument) {
         Waiter &state = *static_cast<Waiter *>(argument);
-        DWORD mask = 0;
-        state.waiting = true;
-        if (!WaitCommEvent(state.port, &mask, nullptr))
-          state.error = GetLastError();
-        state.done = true;
+        try {
+          struct Guard {
+            Waiter &state;
+            ~Guard() { state.unwound = true; }
+          } guard{state};
+          DWORD mask = 0;
+          state.waiting = true;
+          WaitCommEvent(state.port, &mask, nullptr);
+          state.returned = true;
+        } catch (...) {
+          state.caught = true;
+        }
       },
       0, &waiter));
   for (int wait = 0; wait < 100 && !waiter.waiting; wait++)
     Sleep(10);
   Sleep(50);
-  CHECK(!waiter.done);
+  CHECK(!waiter.caught);
   CHECK(TerminateThread(monitor, 0));
-  for (int wait = 0; wait < 100 && !waiter.done; wait++)
+  for (int wait = 0; wait < 100 && !waiter.caught; wait++)
     Sleep(10);
-  CHECK(waiter.done && waiter.error == ERROR_OPERATION_ABORTED);
+  CHECK(waiter.caught && waiter.unwound && !waiter.returned);
 
   CHECK(CloseHandle(port));
   CHECK(!CloseHandle(port)); // Closing twice is an error, not a crash.
   ::close(master);
+
+  ::unsetenv("MEOS_SERIAL_TRACE");
+  std::string trace;
+  if (FILE *file = std::fopen(tracePath.c_str(), "r")) {
+    char chunk[512];
+    std::size_t length;
+    while ((length = std::fread(chunk, 1, sizeof(chunk), file)) > 0)
+      trace.append(chunk, length);
+    std::fclose(file);
+  }
+  ::unlink(tracePath.c_str());
+  CHECK(trace.compare(0, 30, "# MeOS serial trace, started 2") == 0);
+  const std::string port0 = std::string(" ") + name + " ";
+  CHECK(trace.find(port0 + "open " + name + "\n") != std::string::npos);
+  CHECK(trace.find(port0 + "state 38400 8N1\n") != std::string::npos);
+  CHECK(trace.find(port0 + "state 4800 8N1\n") != std::string::npos);
+  CHECK(trace.find(port0 + "! state 12345: failed") != std::string::npos);
+  CHECK(trace.find(port0 + "timeouts interval 50, read 10/byte + 300, write 10/byte + 300\n") !=
+        std::string::npos);
+  CHECK(trace.find(port0 + "> 02 F0 01 03\n") != std::string::npos);
+  CHECK(trace.find(port0 + "< 02 02 03\n") != std::string::npos);
+  CHECK(trace.find(port0 + "< D3\n") != std::string::npos);
+  CHECK(trace.find(port0 + "! wait: thread terminated (error 995)\n") != std::string::npos);
+  CHECK(trace.size() > 6 && trace.compare(trace.size() - 6, 6, "close\n") == 0);
+
+  testSerialPortHangup();
 
   // Port names outside the COM scheme, and ports without a device, fail to open.
   CHECK(CreateFile(L"//./COM999", GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr) ==
@@ -514,8 +641,22 @@ void testSerialPort() {
   const DWORD length = QueryDosDevice(nullptr, devices, 4096);
   if (length > 0) {
     CHECK(devices[length - 1] == 0 && devices[length - 2] == 0);
-    for (DWORD i = 0; i < length - 1; i += std::wcslen(&devices[i]) + 1)
+    for (DWORD i = 0; i < length - 1; i += std::wcslen(&devices[i]) + 1) {
       CHECK(std::wcsncmp(&devices[i], L"COM", 3) == 0);
+      // COM65 to COM96 are /dev/ttyS0 to ttyS31, which exist without a UART behind
+      // them; only those with a known UART type (sysfs "type" not 0) are listed.
+      const int number = std::wcstol(&devices[i] + 3, nullptr, 10);
+      if (number >= 65 && number <= 96) {
+        const std::string type = "/sys/class/tty/ttyS" + std::to_string(number - 65) + "/type";
+        int uart = 0;
+        if (FILE *file = std::fopen(type.c_str(), "r")) {
+          if (std::fscanf(file, "%d", &uart) != 1)
+            uart = 0;
+          std::fclose(file);
+        }
+        CHECK(uart != 0);
+      }
+    }
   }
   CHECK(QueryDosDevice(nullptr, devices, 1) == 0); // Too small, if there are ports at all.
 }

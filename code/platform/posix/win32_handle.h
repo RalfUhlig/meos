@@ -47,7 +47,8 @@ DWORD win32ErrorFromErrno(int error);
 // POSIX device path. Returns nullptr and sets the last error if that fails.
 std::shared_ptr<Win32Object> openSerialPort(const std::string &name, bool read, bool write);
 
-// Wraps an already open terminal (used by CreateFile for /dev/tty* paths).
-std::shared_ptr<Win32Object> makeSerialObject(int fd);
+// Wraps an already open terminal (used by CreateFile for /dev/tty* paths). The path
+// names the port in the trace of MEOS_SERIAL_TRACE.
+std::shared_ptr<Win32Object> makeSerialObject(int fd, const std::string &path);
 
 } // namespace meos_platform
