@@ -1,0 +1,68 @@
+# MeOS serial trace, started 2026-11-05 21:18:16
+#
+# Recorded with MEOS_SERIAL_TRACE on 2026-11-05 (stage 1.3.6 of the Linux port) and
+# replayed by si_replay_test. BSM7/8 USB master station, extended protocol with
+# handshake. The station is unplugged while MeOS waits for a card (MeOS closes the
+# port and reports the lost connection), plugged in again and activated, then an SI6
+# is read (blocks 0 and 6, owner name on the card). The owner's name on the SI6 is
+# replaced by Erika Muster, its CRC recomputed.
+#
+# Expected values, decoded from the raw bytes and compared with MeOS on the day (the
+# SI6 has a clear punch at 12:19:33, which MeOS does not read, and no check punch):
+# station 10 mode 5 extended handshake
+# station 10 mode 5 extended handshake
+# card 680086 first Erika last Muster check - start 12:23:19 finish 12:38:36 punches 66/12:26:44 60/12:27:55 52/12:29:03 66/12:29:48 48/12:30:38 61/12:31:07 66/12:32:19 65/12:34:04 63/12:36:14 67/12:36:55 57/12:37:28 53/12:38:14
+#
+     0.000174 COM2 open /dev/ttyUSB1
+     0.000298 COM2 timeouts interval 50, read 10/byte + 300, write 10/byte + 300
+     0.006946 COM2 state 38400 8N1
+     0.007044 COM2 > FF 02 02 F0 01 4D 6D 0A 03
+     0.707511 COM2 < 02
+     0.707573 COM2 < F0 03 00 0A 4D 8D 28 03
+     1.018023 COM2 > 02 83 02 00 80 BF 17 03
+     1.118280 COM2 < 02 83 83 00 0A 00 00 09 0C 11
+     1.218539 COM2 < F7 36 35 37 18 0B 1D 91 98 80 20 92 4B 08 4E FA
+     1.218602 COM2 < 28 18 0B 1D 00 36 EE 80 00 00 18 04 FF D5 80 00
+     1.218623 COM2 < 00 00 00 00 00 00 00 00 4D 70 FF FF FF 00 C7 C1
+     1.218643 COM2 < 00 00 00 09 00 00 00 00 FF 00 FF FF 00 24 FF 3E
+     1.218663 COM2 < FF FF 19 99 05 1E 7F F8 85 0C 05 01 00 00 00 00
+     1.218682 COM2 < FF FF FF FF 00 00 00 12 FF FF FF 00 30 30 30 35
+     1.218702 COM2 < 7D 20 38 00 00 00 00 00 FF FF FF FF 28 05 0A 37
+     1.218721 COM2 < 05 18 0C 03 01 3E 09 00 0E 12 00 3C B0 C5 03
+    38.017652 COM2 ! wait: device gone (error 5)
+    38.017818 COM2 timeouts interval 0, read 0/byte + 0, write 0/byte + 0
+    38.017848 COM2 close
+    98.178465 COM1 open /dev/ttyUSB0
+    98.178575 COM1 timeouts interval 50, read 10/byte + 300, write 10/byte + 300
+    98.185318 COM1 state 38400 8N1
+    98.185399 COM1 > FF 02 02 F0 01 4D 6D 0A 03
+    98.886496 COM1 < 02
+    98.886559 COM1 < F0 03 00 0A 4D 8D 28 03
+    99.197075 COM1 > 02 83 02 00 80 BF 17 03
+    99.297422 COM1 < 02 83 83 00 0A 00 00 09 0C 11
+    99.397801 COM1 < F7 36 35 37 18 0B 1D 91 98 80 20 92 4B 08 4E FA
+    99.397927 COM1 < 28 18 0B 1D 00 36 EE 80 00 00 18 04 FF D5 80 00
+    99.397952 COM1 < 00 00 00 00 00 00 00 00 4D 70 FF FF FF 00 C7 C1
+    99.397976 COM1 < 00 00 00 0A 00 00 00 00 FF 00 FF FF 00 24 FF 3E
+    99.398000 COM1 < FF FF 19 99 05 1E 7F F8 85 0C 05 01 00 00 00 00
+    99.398023 COM1 < FF FF FF FF 00 00 00 1C FF FF FF 00 30 30 30 35
+    99.398046 COM1 < 7D 20 38 00 00 00 00 00 FF FF FF FF 28 05 0A 37
+    99.398070 COM1 < 05 18 0C 03 01 3E 09 00 0E 12 00 3C CA 66 03
+   115.888680 COM1 < 02
+   115.888752 COM1 < E6
+   115.888770 COM1 < 06 00 0A 00 0A 60 96 24 DA 03
+   115.888849 COM1 > 02 E1 01 00 46 0A 03
+   116.464146 COM1 < 02 E1 83 00 0A 00 01 01 01 01 ED ED ED ED 55 AA 00 0A 60 96 EB 99 00 35 0C 0D 0D 05 09 0C 0D 04 05 77 EE EE EE EE 0D 01 04 95 FF FF FF FF 00 00 00 01 20 20 20 20 4D 75 73 74 65 72 20 20 20 20
+   116.480620 COM1 < 20 20 20 20 20 20 20 20 20 20 45 72 69 6B 61 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 47 45 52 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20
+   116.485192 COM1 < 20 20 20 20 20 20 1F 5D 03
+   116.485347 COM1 > 02 E1 01 06 40 0A 03
+   117.024017 COM1 < 02 E1 83 00 0A 06 0D 42 06 44 0D 3C 06 8B 0D 34 06 CF 0D 42 06 FC 0D 30 07 2E 0D 3D 07 4B 0D 42 07 93 0D 41 07 FC 0D 3F 08 7E 0D 43 08 A7 0D 39 08 C8 0D 35 08 F6 EE EE EE EE EE EE EE EE EE EE
+   117.040432 COM1 < EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE EE
+   117.044702 COM1 < EE EE EE EE EE EE BC 10 03
+   117.044825 COM1 > 06
+   118.078711 COM1 < 02
+   118.078787 COM1 < E7
+   118.078831 COM1 < 06 00 0A 00 0A 60 96 34 DC 03
+   204.428016 COM1 timeouts interval 0, read 0/byte + 0, write 0/byte + 0
+   204.428139 COM1 ! wait: aborted (error 995)
+   204.428202 COM1 close

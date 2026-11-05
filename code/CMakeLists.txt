@@ -315,6 +315,19 @@ if(NOT WIN32)
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/gui_tests_data;${MEOS_TEST_UBSAN_OPTIONS}"
     TIMEOUT 300)
 
+  # Replays recorded traffic of an SI master station through a pseudo terminal and
+  # reads the cards with the real SportIdent class (stage 1.3.6). The traces are
+  # anonymised recordings of MEOS_SERIAL_TRACE.
+  add_executable(meos_si_replay_test platform/qt/tests/si_replay_test.cpp)
+  meos_apply_settings(meos_si_replay_test)
+  target_include_directories(meos_si_replay_test PRIVATE platform/qt/workbench)
+  meos_link_meos(meos_si_replay_test)
+  add_test(NAME si_replay_test
+           COMMAND meos_si_replay_test "${CMAKE_CURRENT_SOURCE_DIR}/platform/qt/tests/si_traces")
+  set_tests_properties(si_replay_test PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_DATA_HOME=${CMAKE_CURRENT_BINARY_DIR}/si_replay_test_data;${MEOS_TEST_UBSAN_OPTIONS}"
+    TIMEOUT 300)
+
   # The MySQL headers in code/mysql (used by mysqlwrapper.cpp) match those of the linked
   # client library. mysql_api_vendored.cpp finds "mysql/mysql.h" in code/, the system
   # header comes from the include directories of the pkg-config module.
