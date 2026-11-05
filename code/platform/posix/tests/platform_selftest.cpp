@@ -643,11 +643,12 @@ void testSerialPort() {
     CHECK(devices[length - 1] == 0 && devices[length - 2] == 0);
     for (DWORD i = 0; i < length - 1; i += std::wcslen(&devices[i]) + 1) {
       CHECK(std::wcsncmp(&devices[i], L"COM", 3) == 0);
-      // COM65 to COM96 are /dev/ttyS0 to ttyS31, which exist without a UART behind
+      // COM1 to COM32 are /dev/ttyS0 to ttyS31, which exist without a UART behind
       // them; only those with a known UART type (sysfs "type" not 0) are listed.
       const int number = std::wcstol(&devices[i] + 3, nullptr, 10);
-      if (number >= 65 && number <= 96) {
-        const std::string type = "/sys/class/tty/ttyS" + std::to_string(number - 65) + "/type";
+      CHECK(number >= 1 && number <= 96);
+      if (number >= 1 && number <= 32) {
+        const std::string type = "/sys/class/tty/ttyS" + std::to_string(number - 1) + "/type";
         int uart = 0;
         if (FILE *file = std::fopen(type.c_str(), "r")) {
           if (std::fscanf(file, "%d", &uart) != 1)

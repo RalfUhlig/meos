@@ -12,24 +12,26 @@
 // the numbers, the user picks one, and CreateFile(L"//./COM<n>") opens it. Linux
 // has device paths instead, so a number denotes a device by this fixed scheme:
 //
-//   COM1 - COM32   /dev/ttyUSB0 ...  USB serial adapters - the SI master stations
+//   COM1 - COM32   /dev/ttyS0 ...    built-in UARTs
+//   COM33 - COM64  /dev/ttyUSB0 ...  USB serial adapters - the SI master stations
 //                                    (Silicon Labs cp210x, FTDI ftdi_sio)
-//   COM33 - COM64  /dev/ttyACM0 ...  USB CDC devices
-//   COM65 - COM96  /dev/ttyS0 ...    built-in UARTs
+//   COM65 - COM96  /dev/ttyACM0 ...  USB CDC devices
 //
 // The mapping does not depend on what is plugged in, so a port selected for a
-// competition still means the same device later. A device path (/dev/ttyUSB0) may
-// also be given instead of a COM name.
+// competition still means the same device later. Built-in ports come first, as on
+// Windows: with no port active, TabSI::refillComPorts proposes the last one, which
+// is then the plugged-in station (decision E17 of the 1.3 plan). A device path
+// (/dev/ttyUSB0) may also be given instead of a COM name.
 //
 // MEOS_SERIAL_TRACE=<file> records the traffic of every serial port as text, one
 // line per event: seconds since the trace started, the port, and what happened.
 //
-//      0.000412 COM1 open /dev/ttyUSB0
-//      0.000530 COM1 state 38400 8N1
-//      0.000601 COM1 > 02 F0 01 4D 6D 0A 03
-//      0.019877 COM1 < 02 F0 03 ...
-//      5.310000 COM1 ! wait: device gone (error 5)
-//      5.310112 COM1 close
+//      0.000412 COM33 open /dev/ttyUSB0
+//      0.000530 COM33 state 38400 8N1
+//      0.000601 COM33 > 02 F0 01 4D 6D 0A 03
+//      0.019877 COM33 < 02 F0 03 ...
+//      5.310000 COM33 ! wait: device gone (error 5)
+//      5.310112 COM33 close
 //
 // ">" is written to the station, "<" read from it, one line per read() or write().
 // The file is replaced when the first port of a process opens it.
@@ -63,9 +65,9 @@ struct PortFamily {
 };
 
 constexpr PortFamily portFamilies[] = {
-  {"ttyUSB", 1, 32},
-  {"ttyACM", 33, 32},
-  {"ttyS", 65, 32},
+  {"ttyS", 1, 32},
+  {"ttyUSB", 33, 32},
+  {"ttyACM", 65, 32},
 };
 
 // The trace file of MEOS_SERIAL_TRACE, shared by all ports that name the same file.
@@ -175,7 +177,7 @@ std::shared_ptr<SerialObject> serialFromHandle(HANDLE handle) {
   return port;
 }
 
-// "COM3" -> "/dev/ttyUSB2", empty for a number outside the scheme above.
+// "COM35" -> "/dev/ttyUSB2", empty for a number outside the scheme above.
 std::string devicePathOfComName(const std::string &name) {
   if (name.size() < 4 || ::strncasecmp(name.c_str(), "COM", 3) != 0)
     return std::string();

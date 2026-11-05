@@ -99,13 +99,14 @@ it hints the outlines vertically only, so that the letters of a word stay togeth
 
   MeOS names serial ports the Windows way, so a COM number stands for a device by this fixed
   scheme (independent of what is plugged in, so a port chosen for a competition keeps its
-  meaning):
+  meaning). Built-in ports come first, as on Windows, so MeOS proposes the station when no port
+  is active:
 
   | Port in MeOS | Device | Typical use |
   |---|---|---|
-  | COM1 – COM32 | `/dev/ttyUSB0` … | USB serial adapters: the SI master stations |
-  | COM33 – COM64 | `/dev/ttyACM0` … | USB CDC devices |
-  | COM65 – COM96 | `/dev/ttyS0` … | built-in UARTs |
+  | COM1 – COM32 | `/dev/ttyS0` … | built-in UARTs (only those with a UART behind them are listed) |
+  | COM33 – COM64 | `/dev/ttyUSB0` … | USB serial adapters: the SI master stations (COM33 is the first) |
+  | COM65 – COM96 | `/dev/ttyACM0` … | USB CDC devices |
 
   A device path such as `/dev/ttyUSB0` is accepted wherever a port name is asked for as well.
 
